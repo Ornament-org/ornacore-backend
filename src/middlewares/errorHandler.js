@@ -106,8 +106,8 @@ export const errorHandler = (error, request, response, _next) => {
     statusCode: normalized.statusCode,
   };
 
-  if (normalized.statusCode >= 500) logger.error(logPayload, normalized.message);
-  else logger.warn(logPayload, normalized.message);
+  if (normalized.statusCode >= 500) logger.error(normalized.message, logPayload);
+  else logger.warn(normalized.message, logPayload);
 
   const details =
     normalized.statusCode < 500 || env.NODE_ENV !== "production" ? normalized.details : undefined;

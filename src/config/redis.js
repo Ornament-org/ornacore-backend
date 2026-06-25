@@ -9,7 +9,7 @@ export const getRedisClient = () => {
 
   if (!redisClient) {
     redisClient = createClient({ url: env.REDIS_URL });
-    redisClient.on("error", (error) => logger.error({ error }, "Redis client error"));
+    redisClient.on("error", (error) => logger.error("Redis client error:", error));
     redisClient.on("reconnecting", () => logger.warn("Redis client reconnecting"));
   }
 

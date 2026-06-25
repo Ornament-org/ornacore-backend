@@ -7,7 +7,7 @@ export const sequelize = new Sequelize(env.DB_NAME, env.DB_USER, env.DB_PASSWORD
   port: env.DB_PORT,
   dialect: "mysql",
   timezone: env.DB_TIMEZONE,
-  logging: env.DB_LOGGING ? (message) => logger.debug({ sql: message }, "Database query") : false,
+  logging: env.DB_LOGGING ? (message) => logger.debug("Database query:", message) : false,
   define: {
     underscored: true,
     timestamps: true,

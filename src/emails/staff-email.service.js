@@ -58,6 +58,7 @@ export const staffEmailService = {
         },
       });
       logger.info(
+        "Staff credentials email accepted by SMTP provider",
         {
           userId: user.id,
           notificationId: notification.id,
@@ -66,7 +67,6 @@ export const staffEmailService = {
           accepted: result.accepted,
           rejected: result.rejected,
         },
-        "Staff credentials email accepted by SMTP provider",
       );
       return { status: "SENT", messageId: result.messageId };
     } catch (error) {
@@ -76,13 +76,13 @@ export const staffEmailService = {
         failureReason,
       });
       logger.error(
+        "Staff welcome email delivery failed",
         {
           error,
           userId: user.id,
           notificationId: notification.id,
           eventType: notification.eventType,
         },
-        "Staff welcome email delivery failed",
       );
       return { status: "FAILED", failureReason };
     }
