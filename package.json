@@ -1,0 +1,75 @@
+{
+  "name": "ornacore-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Modular monolith backend for the OrnaCore B2B jewelry platform.",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
+    "test:watch": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --watch",
+    "test:coverage": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --coverage --runInBand",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db": "npm run db:migrate",
+    "db:sync": "npm run db:migrate",
+    "db:create": "sequelize-cli db:create --config src/config/sequelize-cli.cjs",
+    "db:drop": "sequelize-cli db:drop --config src/config/sequelize-cli.cjs",
+    "db:migrate": "sequelize-cli db:migrate --config src/config/sequelize-cli.cjs --migrations-path src/database/migrations",
+    "db:migrate:status": "sequelize-cli db:migrate:status --config src/config/sequelize-cli.cjs --migrations-path src/database/migrations",
+    "db:migrate:undo": "sequelize-cli db:migrate:undo --config src/config/sequelize-cli.cjs --migrations-path src/database/migrations",
+    "db:migrate:undo:all": "sequelize-cli db:migrate:undo:all --config src/config/sequelize-cli.cjs --migrations-path src/database/migrations",
+    "db:migration:create": "node scripts/generate-db-file.js migration",
+    "db:seed": "sequelize-cli db:seed:all --config src/config/sequelize-cli.cjs --seeders-path src/database/seeders",
+    "db:seed:undo": "sequelize-cli db:seed:undo:all --config src/config/sequelize-cli.cjs --seeders-path src/database/seeders",
+    "db:seed:create": "node scripts/generate-db-file.js seed",
+    "auth:create-admin": "node scripts/create-super-admin.js",
+    "auth:smoke-test": "node scripts/smoke-test-auth.js"
+  },
+  "dependencies": {
+    "bcrypt": "6.0.0",
+    "cloudinary": "2.10.0",
+    "compression": "1.8.1",
+    "cookie-parser": "1.4.7",
+    "cors": "2.8.6",
+    "decimal.js": "10.6.0",
+    "dotenv": "17.4.2",
+    "express": "5.2.1",
+    "express-rate-limit": "8.5.2",
+    "helmet": "8.2.0",
+    "http-status-codes": "2.3.0",
+    "jsonwebtoken": "9.0.3",
+    "multer": "2.2.0",
+    "mysql2": "3.22.5",
+    "nodemailer": "9.0.1",
+    "pino": "10.3.1",
+    "pino-http": "11.0.0",
+    "redis": "6.0.0",
+    "sequelize": "6.37.8",
+    "swagger-ui-express": "5.0.1",
+    "uuid": "14.0.0",
+    "yaml": "2.9.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "cross-env": "10.1.0",
+    "eslint": "10.5.0",
+    "jest": "30.4.2",
+    "prettier": "3.8.4",
+    "sequelize-cli": "6.6.5",
+    "supertest": "7.2.2"
+  },
+  "overrides": {
+    "sequelize": {
+      "uuid": "11.1.1"
+    }
+  }
+}

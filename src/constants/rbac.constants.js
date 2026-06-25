@@ -1,0 +1,13 @@
+export const SYSTEM_ROLE_CODES = Object.freeze({
+  SUPER_ADMIN: "SUPER_ADMIN",
+  ADMIN: "ADMIN",
+  MANAGER: "MANAGER",
+  STAFF: "STAFF",
+});
+
+export const SUPPORTED_ROLE_CODES = Object.freeze(Object.values(SYSTEM_ROLE_CODES));
+export const ADMIN_ASSIGNABLE_ROLE_CODES = Object.freeze([
+  SYSTEM_ROLE_CODES.SUPER_ADMIN,
+  SYSTEM_ROLE_CODES.ADMIN,
+  SYSTEM_ROLE_CODES.MANAGER,
+]);
