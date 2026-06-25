@@ -50,6 +50,17 @@ export const createApp = () => {
   app.use(cookieParser());
   app.use(apiRateLimiter);
 
+  app.get("/", (req, res) => {
+    try {
+      res.json({
+        message: `Welcome to the ${env.DB_NAME} backend of OrnaMent`
+      });
+    } catch (error) {
+      console.error("Error in home route:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
   app.get("/openapi.json", (_request, response) => response.json(openApiDocument));
   app.use(env.API_PREFIX, apiRouter);
