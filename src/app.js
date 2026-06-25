@@ -4,15 +4,14 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import path from "node:path";
-import swaggerUi from "swagger-ui-express";
 import { env } from "./config/env.js";
-import { openApiDocument } from "./config/openapi.js";
 import { apiRateLimiter } from "./middlewares/rateLimiters.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import { notFound } from "./middlewares/notFound.js";
 import { requestContext } from "./middlewares/requestContext.js";
-import { apiRouter } from "./routes/index.js";
 import { AppError } from "./shared/errors/AppError.js";
+import adminRoutes from "./routes/admin.routes.js";
+import shopkeeperRoutes from "./routes/shopkeeper.routes.js";
 
 export const createApp = () => {
   const app = express();
@@ -61,9 +60,10 @@ export const createApp = () => {
     }
   });
 
-  app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
-  app.get("/openapi.json", (_request, response) => response.json(openApiDocument));
-  app.use(env.API_PREFIX, apiRouter);
+  app.use("/api/v1/admin", adminRoutes);
+  app.use("/api/v1/shopkeeper", shopkeeperRoutes);
+  app.use("/admin", adminRoutes);
+  app.use("/shopkeeper", shopkeeperRoutes);
 
   app.use(notFound);
   app.use(errorHandler);
