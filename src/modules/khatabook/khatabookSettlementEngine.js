@@ -381,6 +381,7 @@ export const khatabookSettlementEngine = {
     const remainingByOrder = new Map(orders.map((order) => [String(order.id), d(order.fineDelivered)]));
     const creditAppliedByOrder = new Map(orders.map((order) => [String(order.id), d(0)]));
     const settlementRows = [];
+    let advanceBalance = d(0);
 
     for (const collection of collections) {
       let remainingCredit = d(collection.fineCredit);
@@ -400,6 +401,22 @@ export const khatabookSettlementEngine = {
           appliedFine: gm(appliedFine),
         });
       }
+      // Any credit left after all orders are settled is an advance deposit.
+      advanceBalance = advanceBalance.plus(remainingCredit);
+    }
+
+    // Persist advance balance so the UI can display it.
+    const existing = await db.ShopkeeperMetalCreditLimit.findOne({
+      where: { shopkeeperId, metalId },
+      transaction,
+    });
+    if (existing) {
+      await existing.update({ advanceBalance: gm(advanceBalance) }, { transaction });
+    } else if (advanceBalance.gt(0)) {
+      await db.ShopkeeperMetalCreditLimit.create(
+        { shopkeeperId, metalId, creditLimitGrams: "0.000", advanceBalance: gm(advanceBalance) },
+        { transaction },
+      );
     }
 
     if (settlementRows.length) {

@@ -8,6 +8,7 @@ const ShopkeeperMetalCreditLimit = sequelize.define(
     shopkeeperId: foreignBigInt(),
     metalId: foreignBigInt(),
     creditLimitGrams: quantity({ defaultValue: "0.000" }),
+    advanceBalance: quantity({ defaultValue: "0.000" }),
   },
   {
     ...modelOptions("shopkeeper_metal_credit_limits", {

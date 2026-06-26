@@ -225,7 +225,7 @@ export const khatabookService = {
     const creditByMetal = new Map(
       (shopkeeper.metalCreditLimits ?? []).map((limit) => [
         String(limit.metalId),
-        q(limit.creditLimitGrams),
+        { creditLimitGrams: q(limit.creditLimitGrams), advanceBalance: q(limit.advanceBalance ?? 0) },
       ]),
     );
     const [orders, collections] = await Promise.all([
@@ -248,7 +248,9 @@ export const khatabookService = {
     }
     return metals.map((metal) => {
       const total = totals.get(String(metal.id)) ?? { delivered: d(0), received: d(0), due: d(0) };
-      const creditLimit = d(creditByMetal.get(String(metal.id)) ?? 0);
+      const metalLimits = creditByMetal.get(String(metal.id));
+      const creditLimit = d(metalLimits?.creditLimitGrams ?? 0);
+      const advanceBalance = d(metalLimits?.advanceBalance ?? 0);
       const outstandingDue = d(total.due);
       return {
         metal: mapMetal(metal),
@@ -259,6 +261,7 @@ export const khatabookService = {
         currentRunningDue: q(outstandingDue),
         availableCredit: q(Decimal.max(0, creditLimit.minus(outstandingDue))),
         ledgerBalance: q(outstandingDue),
+        advanceBalance: q(advanceBalance),
       };
     });
   },
