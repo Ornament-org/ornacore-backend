@@ -1,29 +1,60 @@
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
 import { rbacService } from "./rbac.service.js";
 
-export const rbacController = {
-  async roles(_request, response) {
+const roles = async (_request, response) => {
+  try {
     return response.json(
       ApiResponse.success({
         data: await rbacService.listRoles(),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  async permissionsMatrix(_request, response) {
+const permissionsMatrix = async (_request, response) => {
+  try {
     return response.json(
       ApiResponse.success({
         data: await rbacService.getPermissionMatrix(),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  async updateRolePermission(request, response) {
+const updateRolePermission = async (request, response) => {
+  try {
     return response.json(
       ApiResponse.success({
         message: "Permission updated successfully",
         data: await rbacService.updateRolePermission(request.validated.body),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+export const rbacController = {
+  roles,
+  permissionsMatrix,
+  updateRolePermission,
 };

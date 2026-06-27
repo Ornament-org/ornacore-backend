@@ -23,7 +23,8 @@ const optionalCollectionSchema = z
 export const shopkeeperParamSchema = z.object({
   body: z.unknown().optional(),
   params: z.object({ shopkeeperId: id }),
-  query: z.object({}).passthrough(),
+  // BUG-1: allow optional metalId for the payment-preview endpoint
+  query: z.object({ metalId: id.optional() }).passthrough(),
 });
 
 export const ordersQuerySchema = z.object({

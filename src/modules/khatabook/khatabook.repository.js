@@ -59,7 +59,9 @@ export const khatabookRepository = {
   },
 
   findOrders({ shopkeeperId, metalId, search, limit, offset }, options = {}) {
-    const where = { shopkeeperId };
+    // BUG-7: only scope to shopkeeper when provided; omitting returns all (admin global view)
+    const where = {};
+    if (shopkeeperId) where.shopkeeperId = shopkeeperId;
     if (metalId) where.metalId = metalId;
     if (search) {
       where[Op.or] = [
@@ -107,17 +109,16 @@ export const khatabookRepository = {
     return db.KhatabookCollection.create(payload, options);
   },
 
-  deleteSettlements(shopkeeperId, metalId, options = {}) {
+  // BUG-8: Sequelize destroy() does not support `include`. Use a subquery approach instead.
+  async deleteSettlements(shopkeeperId, metalId, options = {}) {
+    const collections = await db.KhatabookCollection.findAll({
+      where: { shopkeeperId, metalId },
+      attributes: ["id"],
+      ...options,
+    });
+    if (!collections.length) return 0;
     return db.KhatabookSettlement.destroy({
-      where: {},
-      include: [
-        {
-          model: db.KhatabookCollection,
-          as: "collection",
-          required: true,
-          where: { shopkeeperId, metalId },
-        },
-      ],
+      where: { collectionId: collections.map((c) => c.id) },
       ...options,
     });
   },
@@ -136,12 +137,25 @@ export const khatabookRepository = {
     return db.KhatabookLedgerEntry.bulkCreate(rows, options);
   },
 
-  findLedger({ shopkeeperId, metalId, orderId, limit, offset }, options = {}) {
+  async findLedger({ shopkeeperId, metalId, orderId, limit, offset }, options = {}) {
     const where = { shopkeeperId };
     if (metalId) where.metalId = metalId;
+
+    // BUG-9: $alias.col$ in where with findAndCountAll produces wrong COUNT.
+    // Resolve the collection IDs that reference this order first, then filter by PK/FK only.
     if (orderId) {
-      where[Op.or] = [{ khatabookOrderId: orderId }, { "$collection.sourceOrderId$": orderId }];
+      const sourceCollectionIds = await db.KhatabookCollection.findAll({
+        where: { sourceOrderId: orderId },
+        attributes: ["id"],
+        ...options,
+      }).then((rows) => rows.map((r) => r.id));
+
+      where[Op.or] = [
+        { khatabookOrderId: orderId },
+        ...(sourceCollectionIds.length ? [{ collectionId: sourceCollectionIds }] : []),
+      ];
     }
+
     return db.KhatabookLedgerEntry.findAndCountAll({
       where,
       include: [
@@ -155,6 +169,7 @@ export const khatabookRepository = {
       ],
       limit,
       offset,
+      subQuery: false, // prevents wrong COUNT when limit+offset is combined with joins
       ...options,
     });
   },

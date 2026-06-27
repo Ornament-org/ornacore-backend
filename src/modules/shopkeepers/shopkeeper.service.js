@@ -5,12 +5,12 @@ import { AppError } from "../../shared/errors/AppError.js";
 import { LEDGER_ENTRY_TYPES, LEDGER_TRANSACTION_STATUSES } from "../metal-ledger/ledger.constants.js";
 import { metalLedgerService } from "../metal-ledger/ledger.service.js";
 
-const zeroGold = () => ({
+const zeroMetric = () => ({
   grams: "0.000",
   inrEquivalent: "0.00",
 });
 
-const toGold = (value) => ({
+const toMetric = (value) => ({
   grams: new Decimal(value ?? 0).toFixed(3),
   inrEquivalent: "0.00",
 });
@@ -57,26 +57,26 @@ const getShopkeeper = async (id) => {
   return profile;
 };
 
-const summarizeGold = async (shopkeeperId, creditLimits = []) => {
+const summarizePrimaryMetal = async (shopkeeperId, creditLimits = []) => {
   const summary = await metalLedgerService.getShopLedgerSummary({ shopkeeperId });
-  const gold = summary.find((row) => row.code === "GOLD") ?? summary[0];
+  const primary = summary[0] ?? null;
   const primaryCreditLimit =
-    creditLimits.find((limit) => String(limit.metalId) === String(gold?.metalId)) ?? creditLimits[0];
+    creditLimits.find((limit) => String(limit.metalId) === String(primary?.metalId)) ?? creditLimits[0];
   const creditLimitGrams = new Decimal(primaryCreditLimit?.creditLimitGrams ?? 0);
-  const dueGrams = new Decimal(gold?.due ?? 0);
+  const dueGrams = new Decimal(primary?.due ?? 0);
   return {
-    primaryMetal: gold
-      ? { metalId: gold.metalId, code: gold.code, name: gold.name }
-      : { metalId: null, code: "GOLD", name: "Gold" },
-    totalGoldDue: gold ? toGold(gold.due) : zeroGold(),
-    totalGoldDelivered: gold ? toGold(gold.delivered) : zeroGold(),
-    totalGoldReceived: gold ? toGold(gold.received) : zeroGold(),
-    outstandingGold: gold ? toGold(gold.due) : zeroGold(),
-    overdueGold: gold ? toGold(gold.due) : zeroGold(),
-    notDueGold: zeroGold(),
-    creditLimit: toGold(creditLimitGrams),
-    creditRemaining: toGold(Decimal.max(creditLimitGrams.minus(dueGrams), 0)),
-    creditUtilized: gold ? toGold(Decimal.min(dueGrams, creditLimitGrams)) : zeroGold(),
+    primaryMetal: primary
+      ? { metalId: primary.metalId, code: primary.code, name: primary.name }
+      : null,
+    totalDue:       primary ? toMetric(primary.due)       : zeroMetric(),
+    totalDelivered: primary ? toMetric(primary.delivered) : zeroMetric(),
+    totalReceived:  primary ? toMetric(primary.received)  : zeroMetric(),
+    outstanding:    primary ? toMetric(primary.due)       : zeroMetric(),
+    overdue:        primary ? toMetric(primary.due)       : zeroMetric(),
+    notDue:         zeroMetric(),
+    creditLimit:    toMetric(creditLimitGrams),
+    creditRemaining: toMetric(Decimal.max(creditLimitGrams.minus(dueGrams), 0)),
+    creditUtilized:  primary ? toMetric(Decimal.min(dueGrams, creditLimitGrams)) : zeroMetric(),
     allMetals: summary,
     creditLimits: creditLimits.map(toCreditLimit),
   };
@@ -106,35 +106,33 @@ const ledgerStats = async (shopkeeperId) => {
       { model: db.Metal, as: "metal" },
     ],
   });
-  const onlyGoldEntries = entries.filter((entry) => entry.metal?.code === "GOLD");
-  const goldEntries = onlyGoldEntries.length ? onlyGoldEntries : entries;
-  const debit = goldEntries
+  const debit = entries
     .filter((entry) => [LEDGER_ENTRY_TYPES.DELIVERY, LEDGER_ENTRY_TYPES.ADJUSTMENT].includes(entry.entryType))
     .reduce((sum, entry) => sum.plus(entry.quantity), new Decimal(0));
-  const credit = goldEntries
+  const credit = entries
     .filter((entry) => [LEDGER_ENTRY_TYPES.RECEIPT, LEDGER_ENTRY_TYPES.RETURN].includes(entry.entryType))
     .reduce((sum, entry) => sum.plus(entry.quantity), new Decimal(0));
-  const lastReceipt = goldEntries
+  const lastReceipt = entries
     .filter((entry) => [LEDGER_ENTRY_TYPES.RECEIPT, LEDGER_ENTRY_TYPES.RETURN].includes(entry.entryType))
     .sort((a, b) => new Date(b.transaction.transactionDate) - new Date(a.transaction.transactionDate))[0];
-  const lastDelivery = goldEntries
+  const lastDelivery = entries
     .filter((entry) => [LEDGER_ENTRY_TYPES.DELIVERY, LEDGER_ENTRY_TYPES.ADJUSTMENT].includes(entry.entryType))
     .sort((a, b) => new Date(b.transaction.transactionDate) - new Date(a.transaction.transactionDate))[0];
 
   return {
-    totalDebitGold: toGold(debit),
-    totalCreditGold: toGold(credit),
-    currentOutstandingGold: toGold(debit.minus(credit)),
+    totalDebit:          toMetric(debit),
+    totalCredit:         toMetric(credit),
+    currentOutstanding:  toMetric(debit.minus(credit)),
     lastPaymentReceived: lastReceipt
       ? {
-          date: lastReceipt.transaction.transactionDate,
-          quantity: toGold(lastReceipt.quantity),
+          date:     lastReceipt.transaction.transactionDate,
+          quantity: toMetric(lastReceipt.quantity),
         }
       : null,
     lastDeliveryDone: lastDelivery
       ? {
-          date: lastDelivery.transaction.transactionDate,
-          quantity: toGold(lastDelivery.quantity),
+          date:     lastDelivery.transaction.transactionDate,
+          quantity: toMetric(lastDelivery.quantity),
         }
       : null,
   };
@@ -194,7 +192,7 @@ export const shopkeeperDetailsService = {
     const profile = await getShopkeeper(id);
     const address = primaryAddress(profile);
     const creditLimits = profile.metalCreditLimits ?? [];
-    const gold = await summarizeGold(profile.id, creditLimits);
+    const metalSummary = await summarizePrimaryMetal(profile.id, creditLimits);
     return {
       id: String(profile.id),
       shopkeeperId: `SHP-${String(profile.id).padStart(6, "0")}`,
@@ -225,28 +223,29 @@ export const shopkeeperDetailsService = {
         latitude: profile.latitude,
         longitude: profile.longitude,
       },
-      gold,
+      metalSummary,
     };
   },
 
   async getAnalytics(id) {
     const profile = await getShopkeeper(id);
-    const [gold, orders, ledger] = await Promise.all([
-      summarizeGold(id, profile.metalCreditLimits ?? []),
+    const [metalSummary, orders, ledger] = await Promise.all([
+      summarizePrimaryMetal(id, profile.metalCreditLimits ?? []),
       orderStats(id),
       ledgerStats(id),
     ]);
     return {
-      gold: {
-        totalGoldDue: gold.totalGoldDue,
-        overdueGold: gold.overdueGold,
-        goldDelivered: gold.totalGoldDelivered,
-        goldReceived: gold.totalGoldReceived,
-        outstandingGold: gold.outstandingGold,
-        creditUtilized: gold.creditUtilized,
-        creditRemaining: gold.creditRemaining,
-        creditLimit: gold.creditLimit,
-        creditLimits: gold.creditLimits,
+      metalSummary: {
+        primaryMetal:   metalSummary.primaryMetal,
+        totalDue:       metalSummary.totalDue,
+        overdue:        metalSummary.overdue,
+        totalDelivered: metalSummary.totalDelivered,
+        totalReceived:  metalSummary.totalReceived,
+        outstanding:    metalSummary.outstanding,
+        creditUtilized: metalSummary.creditUtilized,
+        creditRemaining: metalSummary.creditRemaining,
+        creditLimit:    metalSummary.creditLimit,
+        creditLimits:   metalSummary.creditLimits,
       },
       orders,
       ledger,

@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { Op } from "sequelize";
 import { sequelize } from "../../config/database.js";
 import db from "../../database/models/InitializeModels.js";
 import { AppError } from "../../shared/errors/AppError.js";
@@ -44,39 +45,69 @@ const settlementCollectionType = (settlement, order) =>
     ? "ORDER_CREATION"
     : "LATER_COLLECTION";
 
-const mapSettlement = (settlement, order) => ({
-  id: Number(settlement.id),
-  collectionId: Number(settlement.collectionId),
-  orderId: Number(settlement.khatabookOrderId),
-  appliedFine: q(settlement.appliedFine),
-  source: settlementCollectionType(settlement, order),
-  collectionDate: settlement.collection?.collectionDate ?? null,
-  collectionType: settlement.collection?.collectionType ?? null,
-  sourceOrderId: settlement.collection?.sourceOrderId
-    ? Number(settlement.collection.sourceOrderId)
-    : null,
-});
+const mapSettlement = (settlement, order) => {
+  const col = settlement.collection;
+  const appliedFine = d(settlement.appliedFine);
+  const metalRate = col?.metalRate ? d(col.metalRate) : null;
+  return {
+    id: Number(settlement.id),
+    collectionId: Number(settlement.collectionId),
+    orderId: Number(settlement.khatabookOrderId),
+    appliedFine: q(settlement.appliedFine),
+    source: settlementCollectionType(settlement, order),
+    collectionDate: col?.collectionDate ?? null,
+    collectionType: col?.collectionType ?? null,
+    sourceOrderId: col?.sourceOrderId ? Number(col.sourceOrderId) : null,
+    // Full collection context so UI can show rate/amount
+    metalRate: metalRate ? money(metalRate) : null,
+    receivedQuantity: col?.receivedQuantity != null ? q(col.receivedQuantity) : null,
+    cashAmount: col?.cashAmount != null ? money(col.cashAmount) : null,
+    totalFineCredit: col?.fineCredit != null ? q(col.fineCredit) : null,
+    // For cash: proportional cash that covered THIS appliedFine portion
+    // appliedCash = appliedFine × (metalRate / 10)
+    appliedCash:
+      col?.collectionType === KHATABOOK_COLLECTION_TYPES.CASH && metalRate
+        ? money(appliedFine.times(metalRate).div(10))
+        : null,
+  };
+};
 
 const buildOrderCollectionSummary = (order) => {
-  const creationCollectionIds = new Set((order.collections ?? []).map((collection) => String(collection.id)));
+  const creationCollectionIds = new Set((order.collections ?? []).map((col) => String(col.id)));
   const settlementRows = order.settlements ?? [];
+
+  const isFromCreation = (s) => creationCollectionIds.has(String(s.collectionId));
+  const colType = (s) => s.collection?.collectionType ?? null;
+  const appliedCashAmt = (s) => {
+    const rate = s.collection?.metalRate ? d(s.collection.metalRate) : null;
+    return rate ? d(s.appliedFine).times(rate).div(10) : d(0);
+  };
+
+  const sum = (rows, fn) => rows.reduce((acc, s) => acc.plus(fn(s)), d(0));
+  const metalRows = settlementRows.filter((s) => colType(s) === KHATABOOK_COLLECTION_TYPES.METAL);
+  const cashRows  = settlementRows.filter((s) => colType(s) === KHATABOOK_COLLECTION_TYPES.CASH);
+
+  // Fine applied to this order broken down by metal vs cash collections
+  const metalAppliedAtCreation = sum(metalRows.filter(isFromCreation), (s) => d(s.appliedFine));
+  const metalAppliedLater      = sum(metalRows.filter((s) => !isFromCreation(s)), (s) => d(s.appliedFine));
+  // Cash applied: converted back to INR via appliedFine × rate / 10
+  const cashAppliedAtCreation = sum(cashRows.filter(isFromCreation), appliedCashAmt);
+  const cashAppliedLater      = sum(cashRows.filter((s) => !isFromCreation(s)), appliedCashAmt);
+
   return {
     collectionAddedAtOrderCreation: q(
-      (order.collections ?? []).reduce((total, collection) => total.plus(collection.fineCredit), d(0)),
+      (order.collections ?? []).reduce((total, col) => total.plus(col.fineCredit), d(0)),
     ),
-    collectionAppliedToThisOrder: q(
-      settlementRows.reduce((total, settlement) => total.plus(settlement.appliedFine), d(0)),
-    ),
-    collectionAppliedFromCreation: q(
-      settlementRows
-        .filter((settlement) => creationCollectionIds.has(String(settlement.collectionId)))
-        .reduce((total, settlement) => total.plus(settlement.appliedFine), d(0)),
-    ),
-    collectionAppliedLater: q(
-      settlementRows
-        .filter((settlement) => !creationCollectionIds.has(String(settlement.collectionId)))
-        .reduce((total, settlement) => total.plus(settlement.appliedFine), d(0)),
-    ),
+    collectionAppliedToThisOrder: q(sum(settlementRows, (s) => d(s.appliedFine))),
+    collectionAppliedFromCreation: q(sum(settlementRows.filter(isFromCreation), (s) => d(s.appliedFine))),
+    collectionAppliedLater: q(sum(settlementRows.filter((s) => !isFromCreation(s)), (s) => d(s.appliedFine))),
+    // Metal vs cash breakdown (fine in grams, cash in currency)
+    metalAppliedAtCreation: q(metalAppliedAtCreation),
+    metalAppliedLater: q(metalAppliedLater),
+    cashAppliedAtCreation: money(cashAppliedAtCreation),
+    cashAppliedLater: money(cashAppliedLater),
+    metalApplied: q(metalAppliedAtCreation.plus(metalAppliedLater)),
+    cashApplied: money(cashAppliedAtCreation.plus(cashAppliedLater)),
   };
 };
 
@@ -228,40 +259,53 @@ export const khatabookService = {
         { creditLimitGrams: q(limit.creditLimitGrams), advanceBalance: q(limit.advanceBalance ?? 0) },
       ]),
     );
-    const [orders, collections] = await Promise.all([
+
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const [orders, collections, monthlyOrders, monthlyCollections] = await Promise.all([
       db.KhatabookOrder.findAll({ where: { shopkeeperId } }),
       db.KhatabookCollection.findAll({ where: { shopkeeperId } }),
+      db.KhatabookOrder.findAll({ where: { shopkeeperId, entryDate: { [Op.gte]: monthStart } } }),
+      db.KhatabookCollection.findAll({ where: { shopkeeperId, collectionDate: { [Op.gte]: monthStart } } }),
     ]);
-    const totals = new Map();
-    for (const order of orders) {
-      const key = String(order.metalId);
-      const current = totals.get(key) ?? { delivered: d(0), received: d(0), due: d(0) };
-      current.delivered = current.delivered.plus(order.fineDelivered);
-      current.due = current.due.plus(order.outstandingDue);
-      totals.set(key, current);
-    }
-    for (const collection of collections) {
-      const key = String(collection.metalId);
-      const current = totals.get(key) ?? { delivered: d(0), received: d(0), due: d(0) };
-      current.received = current.received.plus(collection.fineCredit);
-      totals.set(key, current);
-    }
+
+    const accumulate = (rows, getKey, getValue) => {
+      const map = new Map();
+      for (const row of rows) {
+        const key = getKey(row);
+        map.set(key, (map.get(key) ?? d(0)).plus(getValue(row)));
+      }
+      return map;
+    };
+
+    const totalDelivered  = accumulate(orders,      (o) => String(o.metalId), (o) => d(o.fineDelivered));
+    const totalDue        = accumulate(orders,      (o) => String(o.metalId), (o) => d(o.outstandingDue));
+    const totalReceived   = accumulate(collections, (c) => String(c.metalId), (c) => d(c.fineCredit));
+    const monthDelivered  = accumulate(monthlyOrders,      (o) => String(o.metalId), (o) => d(o.fineDelivered));
+    const monthReceived   = accumulate(monthlyCollections, (c) => String(c.metalId), (c) => d(c.fineCredit));
+
     return metals.map((metal) => {
-      const total = totals.get(String(metal.id)) ?? { delivered: d(0), received: d(0), due: d(0) };
-      const metalLimits = creditByMetal.get(String(metal.id));
-      const creditLimit = d(metalLimits?.creditLimitGrams ?? 0);
+      const key = String(metal.id);
+      const metalLimits   = creditByMetal.get(key);
+      const creditLimit   = d(metalLimits?.creditLimitGrams ?? 0);
       const advanceBalance = d(metalLimits?.advanceBalance ?? 0);
-      const outstandingDue = d(total.due);
+      const outstandingDue = totalDue.get(key) ?? d(0);
       return {
         metal: mapMetal(metal),
         creditLimit: q(creditLimit),
-        deliveredQuantity: q(total.delivered),
-        receivedQuantity: q(total.received),
-        outstandingDue: q(outstandingDue),
+        deliveredQuantity: q(totalDelivered.get(key) ?? d(0)),
+        receivedQuantity:  q(totalReceived.get(key)  ?? d(0)),
+        outstandingDue:    q(outstandingDue),
         currentRunningDue: q(outstandingDue),
-        availableCredit: q(Decimal.max(0, creditLimit.minus(outstandingDue))),
-        ledgerBalance: q(outstandingDue),
-        advanceBalance: q(advanceBalance),
+        availableCredit:   q(Decimal.max(0, creditLimit.minus(outstandingDue))),
+        ledgerBalance:     q(outstandingDue),
+        advanceBalance:    q(advanceBalance),
+        monthly: {
+          delivered: q(monthDelivered.get(key) ?? d(0)),
+          received:  q(monthReceived.get(key)  ?? d(0)),
+        },
       };
     });
   },

@@ -1,9 +1,8 @@
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
 import { staffService } from "./staff.service.js";
 
-export const staffController = {
-  // List staff users with pagination and filtering
-  async list(request, response) {
+const list = async (request, response) => {
+  try {
     const result = await staffService.list(request.validated.query);
     return response.json(
       ApiResponse.success({
@@ -11,10 +10,18 @@ export const staffController = {
         meta: result.meta,
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Create new staff account and email credentials
-  async create(request, response) {
+const create = async (request, response) => {
+  try {
     const result = await staffService.create({
       payload: request.validated.body,
       request,
@@ -33,10 +40,18 @@ export const staffController = {
         },
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Update staff account by ID
-  async update(request, response) {
+const update = async (request, response) => {
+  try {
     const user = await staffService.update({
       userId: request.validated.params.id,
       payload: request.validated.body,
@@ -48,10 +63,18 @@ export const staffController = {
         data: user,
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Reset staff password and email new credentials
-  async resetPassword(request, response) {
+const resetPassword = async (request, response) => {
+  try {
     const emailDelivery = await staffService.regenerateCredentials({
       userId: request.validated.params.id,
       request,
@@ -65,20 +88,58 @@ export const staffController = {
         data: { emailDelivery },
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Soft delete staff user by ID
-  async remove(request, response) {
+const remove = async (request, response) => {
+  try {
     await staffService.remove({
       userId: request.validated.params.id,
       actorUserId: request.auth.sub,
     });
     return response.json(ApiResponse.success({ message: "Staff user deleted successfully" }));
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Restore soft deleted staff user
-  async restore(request, response) {
+const restore = async (request, response) => {
+  try {
     await staffService.restore(request.validated.params.id);
     return response.json(ApiResponse.success({ message: "Staff user restored successfully" }));
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+export const staffController = {
+  // List staff users with pagination and filtering
+  list,
+  // Create new staff account and email credentials
+  create,
+  // Update staff account by ID
+  update,
+  // Reset staff password and email new credentials
+  resetPassword,
+  // Soft delete staff user by ID
+  remove,
+  // Restore soft deleted staff user
+  restore,
 };

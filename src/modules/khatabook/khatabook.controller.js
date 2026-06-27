@@ -1,79 +1,115 @@
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
 import { khatabookService } from "./khatabook.service.js";
 
-export const khatabookController = {
-  // Get khatabook overview for shopkeeper
-  async getShopkeeperKhatabook(request, response) {
+const getShopkeeperKhatabook = async (request, response) => {
+  try {
     response.json(
       ApiResponse.success({
         data: await khatabookService.getShopkeeperKhatabook(request.validated.params.shopkeeperId),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get metals list for shopkeeper
-  async getShopkeeperMetals(request, response) {
+const getShopkeeperMetals = async (request, response) => {
+  try {
     response.json(
       ApiResponse.success({
         data: await khatabookService.getShopkeeperMetals(request.validated.params.shopkeeperId),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // List khatabook orders with pagination and filtering
-  async listOrders(request, response) {
-    try {
-      const shopkeeperId = request.validated.params.shopkeeperId ?? request.validated.query.shopkeeperId;
-      const result = await khatabookService.listOrders({
-        shopkeeperId,
-        metalId: request.validated.query.metalId,
-        search: request.validated.query.search,
-        page: request.validated.query.page,
-        pageSize: request.validated.query.pageSize,
-      });
-      response.json(ApiResponse.success(result));
-    } catch (error) {
-      console.error("Error in listOrders:", error);
-      response.status(500).json(
-        ApiResponse.error({
-          code: "INTERNAL_ERROR",
-          message: error.message || "An unexpected error occurred",
-          details: process.env.NODE_ENV === "development" ? error.stack : undefined,
-        }),
-      );
-    }
-  },
+const listOrders = async (request, response) => {
+  try {
+    const shopkeeperId = request.validated.params.shopkeeperId ?? request.validated.query.shopkeeperId;
+    const result = await khatabookService.listOrders({
+      shopkeeperId,
+      metalId: request.validated.query.metalId,
+      search: request.validated.query.search,
+      page: request.validated.query.page,
+      pageSize: request.validated.query.pageSize,
+    });
+    response.json(ApiResponse.success(result));
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get metals summary for shopkeeper
-  async getMetalsSummary(request, response) {
+const getMetalsSummary = async (request, response) => {
+  try {
     response.json(
       ApiResponse.success({
         data: await khatabookService.getShopkeeperMetals(request.validated.query.shopkeeperId),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get order by ID
-  async getOrder(request, response) {
+const getOrder = async (request, response) => {
+  try {
     response.json(
       ApiResponse.success({
         data: await khatabookService.getOrder(request.validated.params.orderId),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get ledger entries for specific order
-  async getOrderLedger(request, response) {
+const getOrderLedger = async (request, response) => {
+  try {
     const result = await khatabookService.getOrderLedger({
       orderId: request.validated.params.orderId,
       page: request.validated.query.page,
       pageSize: request.validated.query.pageSize,
     });
     response.json(ApiResponse.success(result));
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Create new khatabook order
-  async createOrder(request, response) {
+const createOrder = async (request, response) => {
+  try {
     response.status(201).json(
       ApiResponse.success({
         message: "Khatabook order created successfully",
@@ -83,19 +119,35 @@ export const khatabookController = {
         }),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Preview order calculations without saving
-  async previewOrder(request, response) {
+const previewOrder = async (request, response) => {
+  try {
     response.json(
       ApiResponse.success({
         data: await khatabookService.previewOrder(request.validated.body),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Add metal collection to existing order
-  async addMetalCollection(request, response) {
+const addMetalCollection = async (request, response) => {
+  try {
     response.json(
       ApiResponse.success({
         message: "Metal collection added successfully",
@@ -106,10 +158,18 @@ export const khatabookController = {
         }),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Create standalone metal collection entry
-  async createMetalCollection(request, response) {
+const createMetalCollection = async (request, response) => {
+  try {
     response.status(201).json(
       ApiResponse.success({
         message: "Metal collection added successfully",
@@ -119,10 +179,18 @@ export const khatabookController = {
         }),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Add cash collection to existing order
-  async addCashCollection(request, response) {
+const addCashCollection = async (request, response) => {
+  try {
     response.json(
       ApiResponse.success({
         message: "Cash collection added successfully",
@@ -133,10 +201,18 @@ export const khatabookController = {
         }),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Create standalone cash collection entry
-  async createCashCollection(request, response) {
+const createCashCollection = async (request, response) => {
+  try {
     response.status(201).json(
       ApiResponse.success({
         message: "Cash collection added successfully",
@@ -146,5 +222,62 @@ export const khatabookController = {
         }),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+// BUG-1: New controller — returns position data for a specific shopkeeper+metal
+// Used by the admin "Add Received Payment" page to show current outstanding/credit.
+const getPaymentPreview = async (request, response) => {
+  try {
+    const { shopkeeperId } = request.validated.params;
+    const { metalId } = request.validated.query;
+    const metals = await khatabookService.getShopkeeperMetals(shopkeeperId);
+    const position = metalId
+      ? (metals.find((r) => String(r.metal.id) === String(metalId)) ?? null)
+      : null;
+    response.json(ApiResponse.success({ data: position }));
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+export const khatabookController = {
+  // Get khatabook overview for shopkeeper
+  getShopkeeperKhatabook,
+  // Get metals list for shopkeeper
+  getShopkeeperMetals,
+  // List khatabook orders with pagination and filtering
+  listOrders,
+  // Get metals summary for shopkeeper
+  getMetalsSummary,
+  // Get order by ID
+  getOrder,
+  // Get ledger entries for specific order
+  getOrderLedger,
+  // Create new khatabook order
+  createOrder,
+  // Preview order calculations without saving
+  previewOrder,
+  // Add metal collection to existing order
+  addMetalCollection,
+  // Create standalone metal collection entry
+  createMetalCollection,
+  // Add cash collection to existing order
+  addCashCollection,
+  // Create standalone cash collection entry
+  createCashCollection,
+  // Payment position preview for a shopkeeper+metal (BUG-1)
+  getPaymentPreview,
 };

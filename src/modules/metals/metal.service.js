@@ -32,8 +32,9 @@ export const metalService = {
         { name: { [Op.like]: `%${search}%` } },
       ];
     }
-    if (isActive === "true") where.isActive = true;
-    if (isActive === "false") where.isActive = false;
+    // BUG-15: accept both string ("true"/"false") and boolean true/false
+    if (isActive === "true" || isActive === true) where.isActive = true;
+    if (isActive === "false" || isActive === false) where.isActive = false;
 
     const sortableFields = new Set(["name", "code", "displayOrder", "createdAt"]);
     const order =

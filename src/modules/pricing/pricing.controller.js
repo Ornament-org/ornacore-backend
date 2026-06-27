@@ -10,27 +10,42 @@ const sendList = (response, message, result) =>
     }),
   );
 
-export const pricingController = {
-  // List price groups with pagination and filtering
-  async listPriceGroups(request, response) {
+const listPriceGroups = async (request, response) => {
+  try {
     return sendList(
       response,
       "pricing fetched successfully",
       await pricingService.listPriceGroups(request.validated.query),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get price group by ID
-  async getPriceGroupById(request, response) {
+const getPriceGroupById = async (request, response) => {
+  try {
     return response.json(
       ApiResponse.success({
         data: await pricingService.getPriceGroupById(request.validated.params.id),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Create new price group
-  async createPriceGroup(request, response) {
+const createPriceGroup = async (request, response) => {
+  try {
     const priceGroup = await pricingService.createPriceGroup({
       payload: request.validated.body,
       request,
@@ -41,10 +56,18 @@ export const pricingController = {
         data: priceGroup,
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Update price group by ID
-  async updatePriceGroup(request, response) {
+const updatePriceGroup = async (request, response) => {
+  try {
     const priceGroup = await pricingService.updatePriceGroup({
       id: request.validated.params.id,
       payload: request.validated.body,
@@ -56,34 +79,66 @@ export const pricingController = {
         data: priceGroup,
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Delete price group by ID
-  async removePriceGroup(request, response) {
+const removePriceGroup = async (request, response) => {
+  try {
     await pricingService.removePriceGroup({ id: request.validated.params.id, request });
     return response.json(ApiResponse.success({ message: "PriceGroup deleted successfully" }));
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // List pricing rules with pagination and filtering
-  async listPricingRules(request, response) {
+const listPricingRules = async (request, response) => {
+  try {
     return sendList(
       response,
       "pricing fetched successfully",
       await pricingService.listPricingRules(request.validated.query),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get pricing rule by ID
-  async getPricingRuleById(request, response) {
+const getPricingRuleById = async (request, response) => {
+  try {
     return response.json(
       ApiResponse.success({
         data: await pricingService.getPricingRuleById(request.validated.params.id),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Create new pricing rule
-  async createPricingRule(request, response) {
+const createPricingRule = async (request, response) => {
+  try {
     const pricingRule = await pricingService.createPricingRule({
       payload: request.validated.body,
       request,
@@ -94,10 +149,18 @@ export const pricingController = {
         data: pricingRule,
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Update pricing rule by ID
-  async updatePricingRule(request, response) {
+const updatePricingRule = async (request, response) => {
+  try {
     const pricingRule = await pricingService.updatePricingRule({
       id: request.validated.params.id,
       payload: request.validated.body,
@@ -109,34 +172,66 @@ export const pricingController = {
         data: pricingRule,
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Delete pricing rule by ID
-  async removePricingRule(request, response) {
+const removePricingRule = async (request, response) => {
+  try {
     await pricingService.removePricingRule({ id: request.validated.params.id, request });
     return response.json(ApiResponse.success({ message: "PricingRule deleted successfully" }));
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // List shopkeeper price overrides with pagination and filtering
-  async listShopkeeperPriceOverrides(request, response) {
+const listShopkeeperPriceOverrides = async (request, response) => {
+  try {
     return sendList(
       response,
       "pricing fetched successfully",
       await pricingService.listShopkeeperPriceOverrides(request.validated.query),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get shopkeeper price override by ID
-  async getShopkeeperPriceOverrideById(request, response) {
+const getShopkeeperPriceOverrideById = async (request, response) => {
+  try {
     return response.json(
       ApiResponse.success({
         data: await pricingService.getShopkeeperPriceOverrideById(request.validated.params.id),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Create new shopkeeper price override
-  async createShopkeeperPriceOverride(request, response) {
+const createShopkeeperPriceOverride = async (request, response) => {
+  try {
     const override = await pricingService.createShopkeeperPriceOverride({
       payload: request.validated.body,
       request,
@@ -147,10 +242,18 @@ export const pricingController = {
         data: override,
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Update shopkeeper price override by ID
-  async updateShopkeeperPriceOverride(request, response) {
+const updateShopkeeperPriceOverride = async (request, response) => {
+  try {
     const override = await pricingService.updateShopkeeperPriceOverride({
       id: request.validated.params.id,
       payload: request.validated.body,
@@ -162,10 +265,18 @@ export const pricingController = {
         data: override,
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Delete shopkeeper price override by ID
-  async removeShopkeeperPriceOverride(request, response) {
+const removeShopkeeperPriceOverride = async (request, response) => {
+  try {
     await pricingService.removeShopkeeperPriceOverride({
       id: request.validated.params.id,
       request,
@@ -173,5 +284,45 @@ export const pricingController = {
     return response.json(
       ApiResponse.success({ message: "ShopkeeperPriceOverride deleted successfully" }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+export const pricingController = {
+  // List price groups with pagination and filtering
+  listPriceGroups,
+  // Get price group by ID
+  getPriceGroupById,
+  // Create new price group
+  createPriceGroup,
+  // Update price group by ID
+  updatePriceGroup,
+  // Delete price group by ID
+  removePriceGroup,
+  // List pricing rules with pagination and filtering
+  listPricingRules,
+  // Get pricing rule by ID
+  getPricingRuleById,
+  // Create new pricing rule
+  createPricingRule,
+  // Update pricing rule by ID
+  updatePricingRule,
+  // Delete pricing rule by ID
+  removePricingRule,
+  // List shopkeeper price overrides with pagination and filtering
+  listShopkeeperPriceOverrides,
+  // Get shopkeeper price override by ID
+  getShopkeeperPriceOverrideById,
+  // Create new shopkeeper price override
+  createShopkeeperPriceOverride,
+  // Update shopkeeper price override by ID
+  updateShopkeeperPriceOverride,
+  // Delete shopkeeper price override by ID
+  removeShopkeeperPriceOverride,
 };

@@ -22,67 +22,122 @@ const sendAuthResponse = (response, result, message, statusCode = 200) => {
   );
 };
 
-export const authController = {
-  // Authenticate admin user and return session tokens
-  async adminLogin(request, response) {
+const adminLogin = async (request, response) => {
+  try {
     const result = await authService.adminLogin({
       ...request.validated.body,
       client: getClient(request),
     });
     return sendAuthResponse(response, result, "Admin login successful");
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Authenticate shopkeeper user and return session tokens
-  async shopkeeperLogin(request, response) {
+const shopkeeperLogin = async (request, response) => {
+  try {
     const result = await authService.shopkeeperLogin({
       ...request.validated.body,
       client: getClient(request),
     });
     return sendAuthResponse(response, result, "Shopkeeper login successful");
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Register new shopkeeper account pending admin approval
-  async registerShopkeeper(request, response) {
+const registerShopkeeper = async (request, response) => {
+  try {
     const result = await authService.registerShopkeeper(request.validated.body, getClient(request));
     return sendAuthResponse(response, result, "Registration submitted for admin approval", 201);
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Refresh admin session using refresh token
-  async refreshAdminSession(request, response) {
+const refreshAdminSession = async (request, response) => {
+  try {
     const result = await authService.refresh({
       refreshToken: request.validated.body.refreshToken,
       actorScope: "admin",
       client: getClient(request),
     });
     return sendAuthResponse(response, result, "Session refreshed");
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Refresh shopkeeper session using refresh token
-  async refreshShopkeeperSession(request, response) {
+const refreshShopkeeperSession = async (request, response) => {
+  try {
     const result = await authService.refresh({
       refreshToken: request.validated.body.refreshToken,
       actorScope: "shopkeeper",
       client: getClient(request),
     });
     return sendAuthResponse(response, result, "Session refreshed");
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Logout current session using refresh token
-  async logout(request, response) {
+const logout = async (request, response) => {
+  try {
     await authService.logout(request.validated.body.refreshToken);
     return response.json(ApiResponse.success({ message: "Logout successful" }));
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Logout all active sessions for the authenticated user
-  async logoutAll(request, response) {
+const logoutAll = async (request, response) => {
+  try {
     await authService.logoutAll(request.auth.sub);
     return response.json(
       ApiResponse.success({ message: "All active sessions have been logged out" }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get current authenticated user details
-  async me(request, response) {
+const me = async (request, response) => {
+  try {
     const user = await authService.getCurrentUser(request.auth.sub);
     return response.json(
       ApiResponse.success({
@@ -94,11 +149,18 @@ export const authController = {
         },
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-
-  // Change password for authenticated user
-  async changePassword(request, response) {
+const changePassword = async (request, response) => {
+  try {
     await authService.changePassword({
       userId: request.auth.sub,
       ...request.validated.body,
@@ -108,5 +170,33 @@ export const authController = {
         message: "Password changed successfully. Please sign in again.",
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+export const authController = {
+  // Authenticate admin user and return session tokens
+  adminLogin,
+  // Authenticate shopkeeper user and return session tokens
+  shopkeeperLogin,
+  // Register new shopkeeper account pending admin approval
+  registerShopkeeper,
+  // Refresh admin session using refresh token
+  refreshAdminSession,
+  // Refresh shopkeeper session using refresh token
+  refreshShopkeeperSession,
+  // Logout current session using refresh token
+  logout,
+  // Logout all active sessions for the authenticated user
+  logoutAll,
+  // Get current authenticated user details
+  me,
+  // Change password for authenticated user
+  changePassword,
 };

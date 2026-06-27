@@ -96,6 +96,14 @@ khatabookAdminRouter.get(
   asyncHandler(khatabookController.getShopkeeperMetals),
 );
 
+// BUG-1: Payment position preview — returns metal account summary for the payment page
+khatabookAdminRouter.get(
+  "/shopkeeper/:shopkeeperId/payment-preview",
+  ...protectAdmin(PERMISSIONS.LEDGER_VIEW),
+  validate(shopkeeperParamSchema),
+  asyncHandler(khatabookController.getPaymentPreview),
+);
+
 khatabookAdminRouter.get(
   "/shopkeeper/:shopkeeperId/orders",
   ...protectAdmin(PERMISSIONS.LEDGER_VIEW),
@@ -110,6 +118,15 @@ khatabookAdminRouter.get(
   asyncHandler(khatabookController.getOrder),
 );
 
+// BUG-14: Add plural-form ledger route to match REST convention used elsewhere
+khatabookAdminRouter.get(
+  "/orders/:orderId/ledger",
+  ...protectAdmin(PERMISSIONS.LEDGER_VIEW),
+  validate(orderLedgerSchema),
+  asyncHandler(khatabookController.getOrderLedger),
+);
+
+// Legacy singular form kept for backwards compat
 khatabookAdminRouter.get(
   "/order/:orderId/ledger",
   ...protectAdmin(PERMISSIONS.LEDGER_VIEW),

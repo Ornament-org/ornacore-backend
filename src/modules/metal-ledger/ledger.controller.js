@@ -1,9 +1,8 @@
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
 import { metalLedgerService } from "./ledger.service.js";
 
-export const metalLedgerController = {
-  // Create new metal ledger transaction
-  async createLedgerTransaction(request, response) {
+const createLedgerTransaction = async (request, response) => {
+  try {
     const data = await metalLedgerService.createTransaction({
       ...request.validated.body,
       actorUserId: request.auth.sub,
@@ -14,19 +13,35 @@ export const metalLedgerController = {
         data,
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get ledger transaction by ID
-  async getLedgerTransactionById(request, response) {
+const getLedgerTransactionById = async (request, response) => {
+  try {
     response.json(
       ApiResponse.success({
         data: await metalLedgerService.getTransactionById(request.validated.params.id),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Update ledger transaction by ID
-  async updateLedgerTransaction(request, response) {
+const updateLedgerTransaction = async (request, response) => {
+  try {
     response.json(
       ApiResponse.success({
         message: "Ledger transaction updated successfully",
@@ -37,10 +52,18 @@ export const metalLedgerController = {
         }),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Void ledger transaction with reason
-  async voidLedgerTransaction(request, response) {
+const voidLedgerTransaction = async (request, response) => {
+  try {
     response.json(
       ApiResponse.success({
         message: "Ledger transaction voided successfully",
@@ -51,10 +74,18 @@ export const metalLedgerController = {
         }),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get ledger summary for shopkeeper and metal
-  async getLedgerSummary(request, response) {
+const getLedgerSummary = async (request, response) => {
+  try {
     response.json(
       ApiResponse.success({
         data: await metalLedgerService.getShopLedgerSummary({
@@ -63,10 +94,18 @@ export const metalLedgerController = {
         }),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get running balance timeline for shopkeeper and metal
-  async getLedgerTimeline(request, response) {
+const getLedgerTimeline = async (request, response) => {
+  try {
     const result = await metalLedgerService.getRunningBalanceTimeline({
       shopkeeperId: request.validated.params.shopId,
       metalId: request.validated.query.metalId,
@@ -76,10 +115,18 @@ export const metalLedgerController = {
       pageSize: request.validated.query.pageSize,
     });
     response.json(ApiResponse.success(result));
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get ledger summary for authenticated shopkeeper
-  async getCurrentShopLedgerSummary(request, response) {
+const getCurrentShopLedgerSummary = async (request, response) => {
+  try {
     response.json(
       ApiResponse.success({
         data: await metalLedgerService.getShopLedgerSummary({
@@ -88,10 +135,18 @@ export const metalLedgerController = {
         }),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get ledger timeline for authenticated shopkeeper
-  async getCurrentShopLedgerTimeline(request, response) {
+const getCurrentShopLedgerTimeline = async (request, response) => {
+  try {
     const result = await metalLedgerService.getRunningBalanceTimeline({
       shopkeeperId: request.shopkeeper.id,
       metalId: request.validated.query.metalId,
@@ -101,5 +156,31 @@ export const metalLedgerController = {
       pageSize: request.validated.query.pageSize,
     });
     response.json(ApiResponse.success(result));
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+export const metalLedgerController = {
+  // Create new metal ledger transaction
+  createLedgerTransaction,
+  // Get ledger transaction by ID
+  getLedgerTransactionById,
+  // Update ledger transaction by ID
+  updateLedgerTransaction,
+  // Void ledger transaction with reason
+  voidLedgerTransaction,
+  // Get ledger summary for shopkeeper and metal
+  getLedgerSummary,
+  // Get running balance timeline for shopkeeper and metal
+  getLedgerTimeline,
+  // Get ledger summary for authenticated shopkeeper
+  getCurrentShopLedgerSummary,
+  // Get ledger timeline for authenticated shopkeeper
+  getCurrentShopLedgerTimeline,
 };

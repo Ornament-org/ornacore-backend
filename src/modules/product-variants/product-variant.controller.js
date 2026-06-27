@@ -1,9 +1,8 @@
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
 import { productVariantService } from "./product-variant.service.js";
 
-export const productVariantController = {
-  // List product variants with pagination and filtering
-  async list(request, response) {
+const list = async (request, response) => {
+  try {
     const result = await productVariantService.list(request.validated.query);
     return response.json(
       ApiResponse.success({
@@ -12,19 +11,35 @@ export const productVariantController = {
         meta: result.meta,
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Get product variant by ID
-  async getById(request, response) {
+const getById = async (request, response) => {
+  try {
     return response.json(
       ApiResponse.success({
         data: await productVariantService.getById(request.validated.params.id),
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Create new product variant
-  async create(request, response) {
+const create = async (request, response) => {
+  try {
     const productVariant = await productVariantService.create({
       payload: request.validated.body,
       request,
@@ -35,10 +50,18 @@ export const productVariantController = {
         data: productVariant,
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Update product variant by ID
-  async update(request, response) {
+const update = async (request, response) => {
+  try {
     const productVariant = await productVariantService.update({
       id: request.validated.params.id,
       payload: request.validated.body,
@@ -50,11 +73,39 @@ export const productVariantController = {
         data: productVariant,
       }),
     );
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
 
-  // Delete product variant by ID
-  async remove(request, response) {
+const remove = async (request, response) => {
+  try {
     await productVariantService.remove({ id: request.validated.params.id, request });
     return response.json(ApiResponse.success({ message: "ProductVariant deleted successfully" }));
-  },
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+export const productVariantController = {
+  // List product variants with pagination and filtering
+  list,
+  // Get product variant by ID
+  getById,
+  // Create new product variant
+  create,
+  // Update product variant by ID
+  update,
+  // Delete product variant by ID
+  remove,
 };
