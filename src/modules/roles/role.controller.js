@@ -47,6 +47,11 @@ const list = async (_request, response) => {
   }
 };
 
+/*
+  POST /admin/roles
+  { "name": "Custom Role", "description": "..." }
+  NOTE: always returns 409 — custom roles are disabled, system manages supported roles
+*/
 const create = async (_request, _response) => {
   try {
     throw new AppError("Custom roles are disabled. Supported roles are managed by the system.", {
@@ -64,6 +69,10 @@ const create = async (_request, _response) => {
   }
 };
 
+/*
+  PATCH /admin/roles/:id
+  { "name": "Salesperson", "description": "Can manage sales", "permissionIds": [1, 2, 5] }
+*/
 const update = async (request, response) => {
   try {
     const role = await db.Role.findByPk(request.validated.params.id);

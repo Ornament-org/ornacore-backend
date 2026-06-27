@@ -1,7 +1,6 @@
 import Decimal from "decimal.js";
 import { Op } from "sequelize";
 import { SHOPKEEPER_STATUSES } from "../../constants/app.constants.js";
-import { BALANCE_DIRECTIONS } from "../metal-ledger/ledger.constants.js";
 import db from "../../database/models/InitializeModels.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
@@ -37,7 +36,7 @@ export const shopkeeperInclude = [
 ];
 
 export const withBalance = async (profile) => {
-  const [account, ledgerTransactions] = await Promise.all([
+  const [account, khatabookOrders, activeMetals] = await Promise.all([
     db.LedgerAccount.findOne({
       where: { shopkeeperId: profile.id, accountType: "ASSET" },
       include: [
@@ -56,9 +55,15 @@ export const withBalance = async (profile) => {
         },
       ],
     }),
-    db.LedgerTransaction.findAll({
-      where: { shopkeeperId: profile.id, status: "POSTED" },
-      include: [{ model: db.LedgerEntry, as: "entries", include: [{ model: db.Metal, as: "metal" }] }],
+    db.KhatabookOrder.findAll({
+      where: { shopkeeperId: profile.id },
+      include: [{ model: db.Metal, as: "metal", attributes: ["id", "name", "code"], required: false }],
+      attributes: ["metalId", "outstandingDue"],
+    }).catch(() => []),
+    db.Metal.findAll({
+      where: { isActive: true },
+      order: [["displayOrder", "ASC"], ["id", "ASC"]],
+      attributes: ["id", "name", "code"],
     }).catch(() => []),
   ]);
 
@@ -68,21 +73,30 @@ export const withBalance = async (profile) => {
     0,
   );
 
-  const metalMap = new Map();
-  for (const tx of ledgerTransactions) {
-    for (const entry of tx.entries ?? []) {
-      const key = String(entry.metalId);
-      const prev = metalMap.get(key) ?? { metalId: key, name: entry.metal?.name ?? "Metal", code: entry.metal?.code ?? "", due: new Decimal(0) };
-      prev.due = prev.due.plus(new Decimal(entry.quantity ?? 0).times(BALANCE_DIRECTIONS[entry.entryType] ?? 0));
-      metalMap.set(key, prev);
-    }
+  // Build metalId → { name, code, due } from KhatabookOrder.outstandingDue
+  const orderDueMap = new Map();
+  for (const order of khatabookOrders) {
+    const key = String(order.metalId);
+    const prev = orderDueMap.get(key) ?? {
+      name: order.metal?.name ?? "Metal",
+      code: order.metal?.code ?? "",
+      due: new Decimal(0),
+    };
+    prev.due = prev.due.plus(new Decimal(order.outstandingDue ?? 0));
+    orderDueMap.set(key, prev);
   }
-  const metalDues = [...metalMap.values()].map((m) => ({
-    metalId: m.metalId,
-    name: m.name,
-    code: m.code,
-    dueGrams: m.due.toFixed(3),
-  }));
+
+  // Emit a row for every active metal (0.000 gm if no orders for that metal)
+  const metalDues = activeMetals.map((metal) => {
+    const key = String(metal.id);
+    const entry = orderDueMap.get(key);
+    return {
+      metalId: key,
+      name: metal.name,
+      code: metal.code,
+      dueGrams: entry ? entry.due.toFixed(3) : "0.000",
+    };
+  });
 
   return { ...profile.toJSON(), dueAmount: dueAmount.toFixed(2), metalDues };
 };
@@ -299,6 +313,19 @@ const getById = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/shopkeepers/:id
+  {
+    "ownerName": "Ramesh Shah",
+    "shopName": "Shah Jewellers",
+    "city": "Surat",
+    "state": "Gujarat",
+    "pincode": "395001",
+    "isOrderAllowed": true,
+    "creditLimits": [{ "metalId": 1, "creditLimitGrams": 100 }],
+    "assignedSalespersonId": 3
+  }
+*/
 const update = async (request, response) => {
   try {
     const profile = await getProfile(request.validated.params.id);
@@ -368,6 +395,14 @@ const update = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/shopkeepers/:id/approve
+  {
+    "creditLimits": [{ "metalId": 1, "creditLimitGrams": 100 }, { "metalId": 2, "creditLimitGrams": 50 }],
+    "assignedSalespersonId": 3,
+    "internalNote": "Verified documents"
+  }
+*/
 const approve = async (request, response) => {
   try {
     const profile = await getProfile(request.validated.params.id);
@@ -457,6 +492,10 @@ const approve = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/shopkeepers/:id/reject
+  { "reason": "Incomplete documentation provided" }
+*/
 const reject = async (request, response) => {
   try {
     const profile = await getProfile(request.validated.params.id);
@@ -487,6 +526,10 @@ const reject = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/shopkeepers/:id/suspend
+  { "reason": "Account under review for irregular activity" }
+*/
 const suspend = async (request, response) => {
   try {
     const profile = await getProfile(request.validated.params.id);
@@ -517,6 +560,10 @@ const suspend = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/shopkeepers/:id/block
+  { "reason": "Fraudulent activity detected" }
+*/
 const block = async (request, response) => {
   try {
     const profile = await getProfile(request.validated.params.id);
@@ -547,6 +594,10 @@ const block = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/shopkeepers/:id/request-more-info
+  { "reason": "Please provide GST certificate and address proof" }
+*/
 const requestMoreInfo = async (request, response) => {
   try {
     const profile = await getProfile(request.validated.params.id);

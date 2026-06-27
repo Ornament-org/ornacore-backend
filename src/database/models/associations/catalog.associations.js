@@ -50,4 +50,29 @@ export default function catalogAssociations(db) {
   });
   db.ProductImage.belongsTo(db.Media, { foreignKey: "mediaId", as: "media" });
   db.Media.hasMany(db.ProductImage, { foreignKey: "mediaId", as: "productMappings" });
+
+  // Variant attribute system
+  db.Attribute.hasMany(db.AttributeValue, { foreignKey: "attributeId", as: "values" });
+  db.AttributeValue.belongsTo(db.Attribute, { foreignKey: "attributeId", as: "attribute" });
+
+  db.ProductVariant.belongsToMany(db.AttributeValue, {
+    through: db.ProductVariantAttribute,
+    foreignKey: "variantId",
+    otherKey: "attributeValueId",
+    as: "attributeValues",
+  });
+  db.AttributeValue.belongsToMany(db.ProductVariant, {
+    through: db.ProductVariantAttribute,
+    foreignKey: "attributeValueId",
+    otherKey: "variantId",
+    as: "variants",
+  });
+  db.ProductVariantAttribute.belongsTo(db.AttributeValue, {
+    foreignKey: "attributeValueId",
+    as: "attributeValue",
+  });
+  db.ProductVariantAttribute.belongsTo(db.ProductVariant, {
+    foreignKey: "variantId",
+    as: "variant",
+  });
 }

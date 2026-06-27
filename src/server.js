@@ -11,6 +11,7 @@ let shuttingDown = false;
 const shutdown = async (signal, exitCode = 0) => {
   if (shuttingDown) return;
   shuttingDown = true;
+  process.exitCode = exitCode; // set before any async so natural drains exit with correct code
   logger.info("Graceful shutdown started", { signal });
 
   if (server) {

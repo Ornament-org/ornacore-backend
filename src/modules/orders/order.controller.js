@@ -210,6 +210,18 @@ const adminGetById = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/orders
+  {
+    "shopkeeperId": 1,
+    "assignedStaffId": 3,
+    "notes": "Urgent order",
+    "items": [
+      { "productVariantId": 7, "quantity": 2 },
+      { "productVariantId": 9, "quantity": 1 }
+    ]
+  }
+*/
 const adminCreate = async (request, response) => {
   try {
     const input = request.validated.body;
@@ -318,6 +330,11 @@ const adminCreate = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/orders/:id/status
+  { "status": "CONFIRMED", "note": "Payment verified" }
+  Transitions: REQUESTED → PRICE_CONFIRMED/CONFIRMED/CANCELLED | CONFIRMED → PACKED/CANCELLED | PACKED → DISPATCHED/CANCELLED | DISPATCHED → DELIVERED
+*/
 const adminUpdateStatus = async (request, response) => {
   try {
     const input = request.validated.body;
@@ -431,6 +448,10 @@ const adminUpdateStatus = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/orders/:id/assign
+  { "assignedStaffId": 3, "note": "Assigned to Ravi for dispatch" }
+*/
 const adminAssign = async (request, response) => {
   try {
     const order = await db.Order.findByPk(request.validated.params.id);
@@ -517,6 +538,11 @@ const shopkeeperGetById = async (request, response) => {
   }
 };
 
+/*
+  POST /shopkeeper/orders
+  { "notes": "Please wrap carefully" }
+  (no items — converts the authenticated shopkeeper's active cart into an order)
+*/
 const shopkeeperCreate = async (request, response) => {
   try {
     const order = await db.sequelize.transaction(async (transaction) => {

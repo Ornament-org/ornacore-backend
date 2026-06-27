@@ -146,6 +146,19 @@ const getById = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/payments
+  {
+    "shopkeeperId": 1,
+    "method": "CASH",
+    "amount": 15000,
+    "orderId": null,
+    "externalReference": "TXN-20260627-001",
+    "receivedAt": "2026-06-27T10:00:00.000Z",
+    "notes": "Full payment received"
+  }
+  method: CASH | BANK | UPI | CREDIT | CHEQUE | OTHER
+*/
 const create = async (request, response) => {
   try {
     const input = request.validated.body;
@@ -239,6 +252,11 @@ const create = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/payments/:id/status
+  { "status": "REFUNDED", "notes": "Customer requested refund" }
+  Allowed transitions: PENDING → COMPLETED/FAILED/VOIDED | COMPLETED → REFUNDED
+*/
 const updateStatus = async (request, response) => {
   try {
     const payment = await db.Payment.findByPk(request.validated.params.id);

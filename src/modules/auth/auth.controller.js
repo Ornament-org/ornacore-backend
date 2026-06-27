@@ -22,6 +22,10 @@ const sendAuthResponse = (response, result, message, statusCode = 200) => {
   );
 };
 
+/*
+  POST /auth/admin/login
+  { "email": "admin@example.com", "password": "Secret123" }
+*/
 const adminLogin = async (request, response) => {
   try {
     const result = await authService.adminLogin({
@@ -39,6 +43,10 @@ const adminLogin = async (request, response) => {
   }
 };
 
+/*
+  POST /auth/shopkeeper/login
+  { "identifier": "shopkeeper@example.com", "password": "Secret123" }
+*/
 const shopkeeperLogin = async (request, response) => {
   try {
     const result = await authService.shopkeeperLogin({
@@ -56,6 +64,22 @@ const shopkeeperLogin = async (request, response) => {
   }
 };
 
+/*
+  POST /auth/shopkeeper/register
+  {
+    "ownerName": "Ramesh Shah",
+    "shopName": "Shah Jewellers",
+    "email": "ramesh@example.com",
+    "mobile": "+919876543210",
+    "password": "Secret123",
+    "addressLine1": "12 MG Road",
+    "city": "Surat",
+    "state": "Gujarat",
+    "pincode": "395001",
+    "gstNumber": "24AAACH7409R1Z4",
+    "businessType": "Retail"
+  }
+*/
 const registerShopkeeper = async (request, response) => {
   try {
     const result = await authService.registerShopkeeper(request.validated.body, getClient(request));
@@ -70,6 +94,10 @@ const registerShopkeeper = async (request, response) => {
   }
 };
 
+/*
+  POST /auth/admin/refresh
+  { "refreshToken": "<refresh_token>" }
+*/
 const refreshAdminSession = async (request, response) => {
   try {
     const result = await authService.refresh({
@@ -88,6 +116,10 @@ const refreshAdminSession = async (request, response) => {
   }
 };
 
+/*
+  POST /auth/shopkeeper/refresh
+  { "refreshToken": "<refresh_token>" }
+*/
 const refreshShopkeeperSession = async (request, response) => {
   try {
     const result = await authService.refresh({
@@ -106,6 +138,10 @@ const refreshShopkeeperSession = async (request, response) => {
   }
 };
 
+/*
+  POST /auth/logout
+  { "refreshToken": "<refresh_token>" }
+*/
 const logout = async (request, response) => {
   try {
     await authService.logout(request.validated.body.refreshToken);
@@ -159,6 +195,10 @@ const me = async (request, response) => {
   }
 };
 
+/*
+  POST /auth/change-password
+  { "currentPassword": "OldPass123", "newPassword": "NewPass456" }
+*/
 const changePassword = async (request, response) => {
   try {
     await authService.changePassword({

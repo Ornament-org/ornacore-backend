@@ -39,6 +39,11 @@ const list = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/media  (multipart/form-data)
+  files: <binary file(s)>
+  owner: '{"ownerType":"Product","ownerId":5,"folder":"products"}'  (optional JSON string)
+*/
 const upload = async (request, response) => {
   try {
     if (!request.files?.length) {

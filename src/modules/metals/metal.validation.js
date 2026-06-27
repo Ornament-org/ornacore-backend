@@ -11,6 +11,7 @@ export const metalBodySchema = z.object({
   description: z.string().trim().max(2000).nullable().optional(),
   isActive: z.boolean().optional(),
   displayOrder: z.coerce.number().int().nonnegative().optional(),
+  rateUnit: z.enum(["PER_10G", "PER_KG", "PER_G"]).optional(),
 });
 
 export const createMetalSchema = z.object({

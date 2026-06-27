@@ -54,6 +54,10 @@ const getById = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/metals
+  { "code": "GOLD", "name": "Gold", "description": "24K gold", "isActive": true, "displayOrder": 1 }
+*/
 const create = async (request, response) => {
   try {
     const metal = await metalService.create({
@@ -73,6 +77,10 @@ const create = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/metals/:id
+  { "name": "Gold 24K", "isActive": true, "displayOrder": 1 }
+*/
 const update = async (request, response) => {
   try {
     const metal = await metalService.update({

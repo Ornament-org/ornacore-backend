@@ -39,6 +39,8 @@ export const PERMISSIONS = Object.freeze({
   REPORT_EXPORT: "report.export",
   DASHBOARD_VIEW: "dashboard.view",
   AUDIT_VIEW: "audit.view",
+  SETTINGS_MANAGE: "settings.manage",
+  FEATURE_FLAG_MANAGE: "feature_flag.manage",
   KHATABOOK_VIEW: "khatabook.view",
   KHATABOOK_ORDER_CREATE: "khatabook.order.create",
   KHATABOOK_CREATE_ORDER: "khatabook.order.create",

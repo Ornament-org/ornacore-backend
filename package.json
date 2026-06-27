@@ -10,7 +10,7 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
-    "dev": "node src/server.js",
+    "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "test": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
     "test:watch": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --watch",
@@ -48,7 +48,8 @@
     "jsonwebtoken": "9.0.3",
     "multer": "2.2.0",
     "mysql2": "3.22.5",
-    "nodemailer": "9.0.1",
+    "nodemailer": "^9.0.1",
+    "nodemon": "^3.1.14",
     "redis": "6.0.0",
     "sequelize": "6.37.8",
     "swagger-ui-express": "5.0.1",

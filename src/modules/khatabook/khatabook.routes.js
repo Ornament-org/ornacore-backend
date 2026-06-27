@@ -10,10 +10,12 @@ import {
   createAccountCashCollectionSchema,
   createAccountMetalCollectionSchema,
   createOrderSchema,
+  ledgerQuerySchema,
   orderLedgerSchema,
   orderParamSchema,
   ordersQuerySchema,
   metalsSummarySchema,
+  shopkeeperLedgerSchema,
   shopkeeperParamSchema,
 } from "./khatabook.validator.js";
 
@@ -83,10 +85,17 @@ khatabookAdminRouter.post(
 );
 
 khatabookAdminRouter.get(
-  "/shopkeeper/:shopkeeperId",
+  "/ledger",
   ...protectAdmin(PERMISSIONS.LEDGER_VIEW),
-  validate(shopkeeperParamSchema),
-  asyncHandler(khatabookController.getShopkeeperKhatabook),
+  validate(ledgerQuerySchema),
+  asyncHandler(khatabookController.getShopkeeperLedger),
+);
+
+khatabookAdminRouter.get(
+  "/shopkeeper/:shopkeeperId/ledger",
+  ...protectAdmin(PERMISSIONS.LEDGER_VIEW),
+  validate(shopkeeperLedgerSchema),
+  asyncHandler(khatabookController.getShopkeeperLedger),
 );
 
 khatabookAdminRouter.get(
@@ -109,6 +118,13 @@ khatabookAdminRouter.get(
   ...protectAdmin(PERMISSIONS.LEDGER_VIEW),
   validate(ordersQuerySchema),
   asyncHandler(khatabookController.listOrders),
+);
+
+khatabookAdminRouter.get(
+  "/shopkeeper/:shopkeeperId",
+  ...protectAdmin(PERMISSIONS.LEDGER_VIEW),
+  validate(shopkeeperParamSchema),
+  asyncHandler(khatabookController.getShopkeeperKhatabook),
 );
 
 khatabookAdminRouter.get(

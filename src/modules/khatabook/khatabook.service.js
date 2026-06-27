@@ -15,6 +15,7 @@ const mapMetal = (metal) => ({
   code: metal.code,
   name: metal.name,
   description: metal.description,
+  rateUnit: metal.rateUnit ?? "PER_10G",
 });
 
 const mapItem = (item) => ({
@@ -174,7 +175,13 @@ const mapLedgerEntry = (entry) => ({
   metalId: Number(entry.metalId),
   metal: entry.metal ? mapMetal(entry.metal) : null,
   orderId: entry.khatabookOrderId ? Number(entry.khatabookOrderId) : null,
+  orderNumber: entry.order?.orderNumber ?? null,
   collectionId: entry.collectionId ? Number(entry.collectionId) : null,
+  collectionType: entry.collection?.collectionType ?? null,
+  receivedQuantity: entry.collection?.receivedQuantity == null ? null : q(entry.collection.receivedQuantity),
+  cashAmount: entry.collection?.cashAmount == null ? null : money(entry.collection.cashAmount),
+  metalRate: entry.collection?.metalRate == null ? null : money(entry.collection.metalRate),
+  fineCredit: entry.collection?.fineCredit == null ? null : q(entry.collection.fineCredit),
   entryDate: entry.entryDate,
   entryType: entry.entryType,
   debitFine: q(entry.debitFine),
@@ -347,6 +354,21 @@ export const khatabookService = {
       shopkeeperId: order.shopkeeperId,
       metalId: order.metalId,
       orderId,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    });
+    return {
+      data: rows.map(mapLedgerEntry),
+      meta: { page, pageSize, totalItems: count, totalPages: Math.ceil(count / pageSize) },
+    };
+  },
+
+  async getShopkeeperLedger({ shopkeeperId, metalId, page = 1, pageSize = 50 }) {
+    await ensureShopkeeper(shopkeeperId);
+    if (metalId) await ensureMetal(metalId);
+    const { rows, count } = await khatabookRepository.findLedger({
+      shopkeeperId,
+      metalId,
       limit: pageSize,
       offset: (page - 1) * pageSize,
     });

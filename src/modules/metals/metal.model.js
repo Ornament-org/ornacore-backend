@@ -11,6 +11,11 @@ const Metal = sequelize.define(
     description: { type: DataTypes.TEXT, allowNull: true },
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     displayOrder: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
+    rateUnit: {
+      type: DataTypes.ENUM("PER_10G", "PER_KG", "PER_G"),
+      allowNull: false,
+      defaultValue: "PER_10G",
+    },
   },
   { ...modelOptions("metals") },
 );

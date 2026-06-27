@@ -18,9 +18,12 @@ const ProductVariant = sequelize.define(
     karat: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
     tunch: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
     weightGrams: quantity({ allowNull: true }),
+    grossWeight: quantity({ allowNull: true }),
+    netWeight: quantity({ allowNull: true }),
     minimumOrderQuantity: quantity({ defaultValue: "1.000" }),
     attributes: { type: DataTypes.JSON, allowNull: true },
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    isDefault: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   },
   {
     ...modelOptions("product_variants", {

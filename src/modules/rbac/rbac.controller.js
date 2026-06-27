@@ -35,6 +35,10 @@ const permissionsMatrix = async (_request, response) => {
   }
 };
 
+/*
+  PUT /admin/rbac/role-permissions
+  { "roleId": 2, "permissionId": 5, "allowed": true }
+*/
 const updateRolePermission = async (request, response) => {
   try {
     return response.json(

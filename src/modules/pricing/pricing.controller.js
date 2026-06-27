@@ -44,6 +44,10 @@ const getPriceGroupById = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/pricing
+  { "code": "WHOLESALE", "name": "Wholesale Group", "description": "Bulk buyer pricing", "isActive": true }
+*/
 const createPriceGroup = async (request, response) => {
   try {
     const priceGroup = await pricingService.createPriceGroup({
@@ -66,6 +70,10 @@ const createPriceGroup = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/pricing/:id
+  { "name": "Updated Wholesale Group", "isActive": false }
+*/
 const updatePriceGroup = async (request, response) => {
   try {
     const priceGroup = await pricingService.updatePriceGroup({
@@ -89,6 +97,10 @@ const updatePriceGroup = async (request, response) => {
   }
 };
 
+/*
+  DELETE /admin/pricing/:id
+  (no body)
+*/
 const removePriceGroup = async (request, response) => {
   try {
     await pricingService.removePriceGroup({ id: request.validated.params.id, request });
@@ -137,6 +149,20 @@ const getPricingRuleById = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/pricing/rules
+  {
+    "ruleType": "METAL_RATE_BASED",
+    "productVariantId": 7,
+    "priceGroupId": 2,
+    "makingCharge": 250,
+    "percentageValue": null,
+    "priority": 10,
+    "isActive": true,
+    "startsAt": "2026-07-01T00:00:00.000Z",
+    "endsAt": null
+  }
+*/
 const createPricingRule = async (request, response) => {
   try {
     const pricingRule = await pricingService.createPricingRule({
@@ -159,6 +185,10 @@ const createPricingRule = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/pricing/rules/:id
+  { "makingCharge": 300, "priority": 5, "isActive": true }
+*/
 const updatePricingRule = async (request, response) => {
   try {
     const pricingRule = await pricingService.updatePricingRule({
@@ -182,6 +212,10 @@ const updatePricingRule = async (request, response) => {
   }
 };
 
+/*
+  DELETE /admin/pricing/rules/:id
+  (no body)
+*/
 const removePricingRule = async (request, response) => {
   try {
     await pricingService.removePricingRule({ id: request.validated.params.id, request });
@@ -230,6 +264,10 @@ const getShopkeeperPriceOverrideById = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/pricing/overrides
+  { "shopkeeperId": 1, "productVariantId": 7, "overridePrice": 2950, "reason": "Loyal customer discount", "isActive": true }
+*/
 const createShopkeeperPriceOverride = async (request, response) => {
   try {
     const override = await pricingService.createShopkeeperPriceOverride({
@@ -252,6 +290,10 @@ const createShopkeeperPriceOverride = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/pricing/overrides/:id
+  { "overridePrice": 2800, "reason": "Updated discount", "isActive": true }
+*/
 const updateShopkeeperPriceOverride = async (request, response) => {
   try {
     const override = await pricingService.updateShopkeeperPriceOverride({
@@ -275,6 +317,10 @@ const updateShopkeeperPriceOverride = async (request, response) => {
   }
 };
 
+/*
+  DELETE /admin/pricing/overrides/:id
+  (no body)
+*/
 const removeShopkeeperPriceOverride = async (request, response) => {
   try {
     await pricingService.removeShopkeeperPriceOverride({

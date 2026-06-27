@@ -12,6 +12,7 @@ import { requestContext } from "./middlewares/requestContext.js";
 import { AppError } from "./shared/errors/AppError.js";
 import adminRoutes from "./routes/admin.routes.js";
 import shopkeeperRoutes from "./routes/shopkeeper.routes.js";
+import { featureFlagPublicRouter } from "./modules/feature-flags/feature-flag.routes.js";
 
 export const createApp = () => {
   const app = express();
@@ -62,8 +63,10 @@ export const createApp = () => {
 
   app.use("/api/v1/admin", adminRoutes);
   app.use("/api/v1/shopkeeper", shopkeeperRoutes);
+  app.use("/api/v1/config", featureFlagPublicRouter);
   app.use("/admin", adminRoutes);
   app.use("/shopkeeper", shopkeeperRoutes);
+  app.use("/config", featureFlagPublicRouter);
 
   app.use(notFound);
   app.use(errorHandler);

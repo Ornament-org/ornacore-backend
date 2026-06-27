@@ -21,6 +21,9 @@ import { accountsLedgerAdminRouter } from "../modules/accounts-ledger/accounts-l
 import { metalLedgerShopAdminRouter } from "../modules/metal-ledger/ledger.routes.js";
 import { metalLedgerTransactionAdminRouter } from "../modules/metal-ledger/ledger.routes.js";
 import { khatabookAdminRouter } from "../modules/khatabook/khatabook.routes.js";
+import { analyticsAdminRouter } from "../modules/analytics/analytics.routes.js";
+import { featureFlagAdminRouter } from "../modules/feature-flags/feature-flag.routes.js";
+import { attributeAdminRouter } from "../modules/attributes/attribute.routes.js";
 
 const router = Router();
 
@@ -46,5 +49,8 @@ router.use("/accounts-ledger", accountsLedgerAdminRouter);
 router.use("/shops", metalLedgerShopAdminRouter);
 router.use("/ledger-transactions", metalLedgerTransactionAdminRouter);
 router.use("/khatabook", khatabookAdminRouter);
+router.use("/analytics", analyticsAdminRouter);
+router.use("/feature-flags", featureFlagAdminRouter);
+router.use("/attributes", attributeAdminRouter);
 
 export default router;

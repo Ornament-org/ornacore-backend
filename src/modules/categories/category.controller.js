@@ -69,6 +69,10 @@ const getById = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/categories
+  { "name": "Rings", "parentId": null, "metalId": 1, "shortDescription": "Ring collection", "mediaId": null, "sortOrder": 0 }
+*/
 const create = async (request, response) => {
   try {
     const category = await categoryService.create({
@@ -88,6 +92,10 @@ const create = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/categories/:id
+  { "name": "Gold Rings", "status": "ACTIVE", "sortOrder": 1 }
+*/
 const update = async (request, response) => {
   try {
     const category = await categoryService.update({

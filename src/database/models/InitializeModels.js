@@ -91,6 +91,19 @@ db.KhatabookLedgerEntry = (
   await import("../../modules/khatabook/khatabook-ledger-entry.model.js")
 ).default;
 
+// Feature flags
+db.FeatureFlag = (await import("../../modules/feature-flags/feature-flag.model.js")).default;
+db.FeatureFlagAudit = (
+  await import("../../modules/feature-flags/feature-flag-audit.model.js")
+).default;
+
+// Variant attribute system
+db.Attribute = (await import("../../modules/attributes/attribute.model.js")).default;
+db.AttributeValue = (await import("../../modules/attributes/attribute-value.model.js")).default;
+db.ProductVariantAttribute = (
+  await import("../../modules/attributes/product-variant-attribute.model.js")
+).default;
+
 identityAssociations(db);
 catalogAssociations(db);
 commerceAssociations(db);

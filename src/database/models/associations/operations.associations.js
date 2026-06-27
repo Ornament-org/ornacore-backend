@@ -7,4 +7,8 @@ export default function operationsAssociations(db) {
 
   db.User.hasMany(db.Media, { foreignKey: "uploadedByUserId", as: "uploadedMedia" });
   db.Media.belongsTo(db.User, { foreignKey: "uploadedByUserId", as: "uploadedBy" });
+
+  db.FeatureFlag.hasMany(db.FeatureFlagAudit, { foreignKey: "featureFlagId", as: "audits" });
+  db.FeatureFlagAudit.belongsTo(db.FeatureFlag, { foreignKey: "featureFlagId", as: "flag" });
+  db.FeatureFlagAudit.belongsTo(db.User, { foreignKey: "actorUserId", as: "actor" });
 }

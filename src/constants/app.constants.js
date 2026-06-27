@@ -20,6 +20,12 @@ export const SHOPKEEPER_STATUSES = Object.freeze({
   BLOCKED: "BLOCKED",
 });
 
+export const MAKING_TYPES = Object.freeze({
+  FIXED: "FIXED",
+  PER_GRAM: "PER_GRAM",
+  PERCENT: "PERCENT",
+});
+
 export const PRODUCT_STATUSES = Object.freeze({
   DRAFT: "DRAFT",
   ACTIVE: "ACTIVE",

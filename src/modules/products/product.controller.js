@@ -246,6 +246,30 @@ const adminGetById = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/products
+  {
+    "metalId": 1,
+    "designCode": "RNG-001",
+    "name": "Classic Gold Ring",
+    "description": "Handcrafted 22K gold ring",
+    "status": "DRAFT",
+    "categoryMappings": [{ "categoryId": 3, "isPrimary": true, "sortOrder": 0 }],
+    "jewelryAttributes": { "style": "Traditional" },
+    "variants": [
+      {
+        "sku": "RNG-001-22K",
+        "purity": "22K",
+        "tunch": 91.6,
+        "weightGrams": 5.5,
+        "minimumOrderQuantity": 1,
+        "basePrice": 3200,
+        "openingStock": 10,
+        "reorderLevel": 2
+      }
+    ]
+  }
+*/
 const adminCreate = async (request, response) => {
   try {
     const { variants, categoryMappings, ...payload } = request.validated.body;
@@ -296,6 +320,15 @@ const adminCreate = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/products/:id
+  {
+    "name": "Updated Ring Name",
+    "status": "ACTIVE",
+    "categoryMappings": [{ "categoryId": 3, "isPrimary": true }],
+    "variants": [{ "id": 7, "sku": "RNG-001-22K", "tunch": 92.0 }]
+  }
+*/
 const adminUpdate = async (request, response) => {
   try {
     const product = await db.Product.findByPk(request.validated.params.id);
@@ -405,6 +438,10 @@ const adminUpdate = async (request, response) => {
   }
 };
 
+/*
+  DELETE /admin/products/:id
+  (no body — fails with 400 if product has existing orders)
+*/
 const adminDelete = async (request, response) => {
   try {
     const product = await db.Product.findByPk(request.validated.params.id);
@@ -449,6 +486,15 @@ const adminDelete = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/products/:id/images
+  {
+    "images": [
+      { "mediaId": 12, "isPrimary": true, "altText": "Front view", "displayOrder": 0 },
+      { "mediaId": 13, "productVariantId": 7, "isPrimary": false, "displayOrder": 1 }
+    ]
+  }
+*/
 const adminAddImages = async (request, response) => {
   try {
     const product = await db.Product.findByPk(request.validated.params.id);

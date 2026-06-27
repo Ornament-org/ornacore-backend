@@ -51,6 +51,19 @@ const getById = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/delivery
+  {
+    "orderId": 15,
+    "status": "DISPATCHED",
+    "courierName": "BlueDart",
+    "trackingNumber": "BD-12345678",
+    "trackingUrl": "https://bluedart.com/track/BD-12345678",
+    "dispatchedAt": "2026-06-27T09:00:00.000Z",
+    "estimatedDeliveryAt": "2026-06-29T18:00:00.000Z",
+    "notes": "Handle with care"
+  }
+*/
 const create = async (request, response) => {
   try {
     const delivery = await deliveryService.create({
@@ -70,6 +83,10 @@ const create = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/delivery/:id
+  { "status": "DELIVERED", "deliveredAt": "2026-06-29T14:30:00.000Z", "notes": "Delivered to owner" }
+*/
 const update = async (request, response) => {
   try {
     const delivery = await deliveryService.update({

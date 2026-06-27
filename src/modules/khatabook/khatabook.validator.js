@@ -58,6 +58,31 @@ export const orderLedgerSchema = z.object({
     .passthrough(),
 });
 
+export const shopkeeperLedgerSchema = z.object({
+  body: z.unknown().optional(),
+  params: z.object({ shopkeeperId: id }),
+  query: z
+    .object({
+      metalId: id.optional(),
+      page: z.coerce.number().int().positive().default(1),
+      pageSize: z.coerce.number().int().positive().max(100).default(50),
+    })
+    .passthrough(),
+});
+
+export const ledgerQuerySchema = z.object({
+  body: z.unknown().optional(),
+  params: z.object({}).passthrough(),
+  query: z
+    .object({
+      shopkeeperId: id,
+      metalId: id.optional(),
+      page: z.coerce.number().int().positive().default(1),
+      pageSize: z.coerce.number().int().positive().max(100).default(50),
+    })
+    .passthrough(),
+});
+
 export const createOrderSchema = z.object({
   body: z.object({
     shopkeeperId: id,

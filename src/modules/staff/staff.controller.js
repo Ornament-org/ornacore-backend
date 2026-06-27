@@ -20,6 +20,10 @@ const list = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/staff
+  { "fullName": "Ravi Kumar", "email": "ravi@example.com", "mobile": "+919876543210", "designation": "Sales Manager", "actorType": "STAFF", "roleId": 3 }
+*/
 const create = async (request, response) => {
   try {
     const result = await staffService.create({
@@ -50,6 +54,10 @@ const create = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/staff/:id
+  { "fullName": "Ravi Kumar", "designation": "Senior Sales Manager", "status": "ACTIVE", "roleId": 3 }
+*/
 const update = async (request, response) => {
   try {
     const user = await staffService.update({
@@ -73,6 +81,10 @@ const update = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/staff/:id/reset-password
+  {}
+*/
 const resetPassword = async (request, response) => {
   try {
     const emailDelivery = await staffService.regenerateCredentials({

@@ -108,6 +108,40 @@ const getOrderLedger = async (request, response) => {
   }
 };
 
+const getShopkeeperLedger = async (request, response) => {
+  try {
+    const result = await khatabookService.getShopkeeperLedger({
+      shopkeeperId: request.validated.params.shopkeeperId ?? request.validated.query.shopkeeperId,
+      metalId: request.validated.query.metalId,
+      page: request.validated.query.page,
+      pageSize: request.validated.query.pageSize,
+    });
+    response.json(ApiResponse.success(result));
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+/*
+  POST /admin/khatabook/orders
+  {
+    "shopkeeperId": 1,
+    "metalId": 1,
+    "entryDate": "2026-06-27",
+    "items": [
+      { "itemName": "Ring", "grossWeight": 5.5, "tunch": 91.6 },
+      { "itemName": "Necklace", "grossWeight": 12.0, "tunch": 88.0 }
+    ],
+    "notes": "Special order",
+    "overrideCreditLimit": false,
+    "collection": { "metalReceived": 0, "cashReceived": 5000, "metalRate": 62000 }
+  }
+*/
 const createOrder = async (request, response) => {
   try {
     response.status(201).json(
@@ -129,6 +163,15 @@ const createOrder = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/khatabook/orders/preview
+  {
+    "shopkeeperId": 1,
+    "metalId": 1,
+    "items": [{ "itemName": "Ring", "grossWeight": 5.5, "tunch": 91.6 }],
+    "collection": { "cashReceived": 5000, "metalRate": 62000 }
+  }
+*/
 const previewOrder = async (request, response) => {
   try {
     response.json(
@@ -146,6 +189,10 @@ const previewOrder = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/khatabook/orders/:orderId/gold-collection
+  { "receivedQuantity": 4.5, "collectionDate": "2026-06-27", "notes": "Received at shop" }
+*/
 const addMetalCollection = async (request, response) => {
   try {
     response.json(
@@ -168,6 +215,10 @@ const addMetalCollection = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/khatabook/collections/metal
+  { "shopkeeperId": 1, "metalId": 1, "receivedQuantity": 10.0, "collectionDate": "2026-06-27", "notes": "Account-level metal payment" }
+*/
 const createMetalCollection = async (request, response) => {
   try {
     response.status(201).json(
@@ -189,6 +240,10 @@ const createMetalCollection = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/khatabook/orders/:orderId/cash-collection
+  { "cashAmount": 15000, "metalRate": 62000, "collectionDate": "2026-06-27", "notes": "Cash received" }
+*/
 const addCashCollection = async (request, response) => {
   try {
     response.json(
@@ -211,6 +266,10 @@ const addCashCollection = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/khatabook/collections/cash
+  { "shopkeeperId": 1, "metalId": 1, "cashAmount": 31000, "metalRate": 62000, "collectionDate": "2026-06-27", "notes": "Account-level cash payment" }
+*/
 const createCashCollection = async (request, response) => {
   try {
     response.status(201).json(
@@ -266,6 +325,8 @@ export const khatabookController = {
   getOrder,
   // Get ledger entries for specific order
   getOrderLedger,
+  // Get transaction ledger entries for a shopkeeper metal account
+  getShopkeeperLedger,
   // Create new khatabook order
   createOrder,
   // Preview order calculations without saving

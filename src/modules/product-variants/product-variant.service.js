@@ -11,14 +11,23 @@ const productVariantFields = [
   "karat",
   "tunch",
   "weightGrams",
+  "grossWeight",
+  "netWeight",
   "minimumOrderQuantity",
   "attributes",
   "isActive",
+  "isDefault",
 ];
 
 const productVariantInclude = [
   { model: db.Product, as: "product", required: false },
   { model: db.Inventory, as: "inventory", required: false },
+  {
+    model: db.AttributeValue,
+    as: "attributeValues",
+    required: false,
+    include: [{ model: db.Attribute, as: "attribute" }],
+  },
 ];
 
 const filterProductVariantPayload = (payload) =>

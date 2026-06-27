@@ -38,6 +38,19 @@ const getById = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/product-variants
+  {
+    "productId": 5,
+    "sku": "RNG-001-18K",
+    "purity": "18K",
+    "tunch": 75.0,
+    "weightGrams": 4.2,
+    "minimumOrderQuantity": 1,
+    "attributes": { "size": "7", "finish": "matte" },
+    "isActive": true
+  }
+*/
 const create = async (request, response) => {
   try {
     const productVariant = await productVariantService.create({
@@ -60,6 +73,10 @@ const create = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/product-variants/:id
+  { "tunch": 92.0, "weightGrams": 4.5, "isActive": true, "minimumOrderQuantity": 2 }
+*/
 const update = async (request, response) => {
   try {
     const productVariant = await productVariantService.update({
@@ -83,6 +100,10 @@ const update = async (request, response) => {
   }
 };
 
+/*
+  DELETE /admin/product-variants/:id
+  (no body)
+*/
 const remove = async (request, response) => {
   try {
     await productVariantService.remove({ id: request.validated.params.id, request });

@@ -3,7 +3,7 @@ import db from "../../database/models/InitializeModels.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { auditLogService } from "../audit-logs/audit-log.service.js";
 
-const metalFields = ["code", "name", "description", "isActive", "displayOrder"];
+const metalFields = ["code", "name", "description", "isActive", "displayOrder", "rateUnit"];
 
 const filterMetalPayload = (payload) =>
   Object.fromEntries(

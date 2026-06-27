@@ -131,6 +131,17 @@ const getById = async (request, response) => {
   }
 };
 
+/*
+  PATCH /admin/inventory/:id/adjust
+  {
+    "movementType": "STOCK_IN",
+    "quantity": 10,
+    "reason": "Supplier delivery",
+    "referenceType": "PURCHASE_ORDER",
+    "referenceId": 42
+  }
+  movementType: STOCK_IN | STOCK_OUT | ADJUSTMENT | RESERVATION | RESERVATION_RELEASE | DAMAGED | RETURNED
+*/
 const adjust = async (request, response) => {
   try {
     const input = request.validated.body;

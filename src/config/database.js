@@ -17,7 +17,8 @@ export const sequelize = new Sequelize(env.DB_NAME, env.DB_USER, env.DB_PASSWORD
     min: env.DB_POOL_MIN,
     max: env.DB_POOL_MAX,
     acquire: 30000,
-    idle: 10000,
+    idle: 600000, // 10 min — remote DB; don't evict min-connections immediately
+    evict: 60000,
   },
   dialectOptions: {
     decimalNumbers: false,
