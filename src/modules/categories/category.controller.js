@@ -154,6 +154,26 @@ const remove = async (request, response) => {
   }
 };
 
+const bulkRemove = async (request, response) => {
+  try {
+    const { deletedIds, skipped } = await categoryService.bulkRemove({
+      ids: request.validated.body.ids,
+      request,
+    });
+    const message = skipped.length
+      ? `${deletedIds.length} categor${deletedIds.length === 1 ? "y" : "ies"} deleted, ${skipped.length} skipped`
+      : `${deletedIds.length} categor${deletedIds.length === 1 ? "y" : "ies"} deleted`;
+    return response.json(ApiResponse.success({ message, data: { deletedIds, skipped } }));
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
 const shopkeeperTree = async (request, response) => {
   try {
     const rows = await db.Category.findAll({
@@ -243,6 +263,8 @@ export const categoryController = {
   update,
   // Delete category by ID
   remove,
+  // Delete multiple categories by ID at once
+  bulkRemove,
   shopkeeperTree,
   shopkeeperList,
 };

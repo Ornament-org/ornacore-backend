@@ -352,4 +352,83 @@ export const categoryService = {
       });
     });
   },
+
+  // Selecting a whole subtree in the tree view is the common case, so this
+  // can't just apply the same-as-`remove` guard once per id in caller order
+  // — a parent picked alongside its children would always be skipped as
+  // "has children". Instead it repeatedly deletes whatever in the batch has
+  // no remaining children/products *right now* (categories.count already
+  // excludes rows this loop has soft-deleted, via the model's isDeleted
+  // default scope), so a selected subtree resolves bottom-up regardless of
+  // selection order. Anything still blocked once no pass makes progress
+  // (a real product mapping, or a child outside the selection) is reported
+  // back as skipped with the same details `remove` throws in its 409.
+  async bulkRemove({ ids, request }) {
+    const uniqueIds = [...new Set(ids)];
+    const categories = await db.Category.findAll({ where: { id: uniqueIds } });
+    const byId = new Map(categories.map((category) => [category.id, category]));
+    const pending = new Set(byId.keys());
+    const deletedIds = [];
+    const skipped = [];
+
+    let progressed = true;
+    while (progressed && pending.size) {
+      progressed = false;
+      for (const id of [...pending]) {
+        const category = byId.get(id);
+        const [childCount, productCount] = await Promise.all([
+          db.Category.count({ where: { parentId: id } }),
+          db.ProductCategoryMapping.count({ where: { categoryId: id } }),
+        ]);
+        if (childCount || productCount) continue;
+
+        await db.sequelize.transaction(async (transaction) => {
+          const oldValue = category.toJSON();
+          await category.update(
+            {
+              slug: `${category.slug.slice(0, 150)}--deleted-${category.id}`,
+              status: CATEGORY_STATUSES.INACTIVE,
+              isDeleted: true,
+              updatedByUserId: request.auth.sub,
+            },
+            { transaction },
+          );
+          await auditLogService.record({
+            request,
+            action: "DELETE",
+            module: "categories",
+            entityType: "Category",
+            entityId: category.id,
+            oldValue,
+            newValue: category,
+            transaction,
+          });
+        });
+
+        deletedIds.push(id);
+        pending.delete(id);
+        progressed = true;
+      }
+    }
+
+    for (const id of pending) {
+      const category = byId.get(id);
+      const [childCount, productCount] = await Promise.all([
+        db.Category.count({ where: { parentId: id } }),
+        db.ProductCategoryMapping.count({ where: { categoryId: id } }),
+      ]);
+      skipped.push({
+        id,
+        name: category?.name,
+        reason: "Has child categories or mapped products",
+        details: { childCount, productCount },
+      });
+    }
+
+    uniqueIds.forEach((id) => {
+      if (!byId.has(id)) skipped.push({ id, reason: "Not found" });
+    });
+
+    return { deletedIds, skipped };
+  },
 };

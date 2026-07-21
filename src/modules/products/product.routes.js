@@ -9,7 +9,14 @@ import { asyncHandler } from "../../shared/http/asyncHandler.js";
 import { idParamSchema, listQuerySchema } from "../../shared/http/crud.validation.js";
 import { createModuleRouter } from "../module.router.js";
 import { productController } from "./product.controller.js";
-import { createSchema, updateSchema, imageSchema, imageIdSchema, slugParamSchema } from "./product.validation.js";
+import {
+  createSchema,
+  updateSchema,
+  imageSchema,
+  imageIdSchema,
+  slugParamSchema,
+  bulkDeleteSchema,
+} from "./product.validation.js";
 
 export const productAdminRouter = createModuleRouter();
 export const productShopkeeperRouter = createModuleRouter();
@@ -41,6 +48,16 @@ productAdminRouter.patch(
   ...protectAdmin(PERMISSIONS.PRODUCT_MANAGE),
   validate(updateSchema),
   asyncHandler(productController.adminUpdate),
+);
+
+// Registered before "/:id" — otherwise Express would match "bulk" as the
+// :id param and fail idParamSchema's numeric coercion before ever reaching
+// the bulk handler.
+productAdminRouter.delete(
+  "/bulk",
+  ...protectAdmin(PERMISSIONS.PRODUCT_MANAGE),
+  validate(bulkDeleteSchema),
+  asyncHandler(productController.adminBulkDelete),
 );
 
 productAdminRouter.delete(

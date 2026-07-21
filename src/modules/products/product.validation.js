@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { PRODUCT_STATUSES, PRODUCT_TYPES } from "../../constants/app.constants.js";
 
+export const bulkDeleteSchema = z.object({
+  body: z.object({
+    ids: z.array(z.coerce.number().int().positive()).min(1).max(100),
+  }),
+  params: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+});
+
 export const variantSchema = z.object({
   id: z.coerce.number().int().positive().optional(),
   sku: z.string().trim().min(2).max(100),

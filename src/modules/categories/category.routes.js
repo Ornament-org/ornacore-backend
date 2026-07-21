@@ -13,6 +13,7 @@ import {
   categoryListSchema,
   createCategorySchema,
   updateCategorySchema,
+  categoryBulkDeleteSchema,
 } from "./category.validation.js";
 
 export const categoryAdminRouter = createModuleRouter();
@@ -24,6 +25,10 @@ categoryAdminRouter.get("/tree", ...protectAdmin(PERMISSIONS.CATALOG_MANAGE), as
 categoryAdminRouter.get("/:id", ...protectAdmin(PERMISSIONS.CATALOG_MANAGE), validate(categoryIdSchema), asyncHandler(categoryController.getById));
 categoryAdminRouter.post("/", ...protectAdmin(PERMISSIONS.CATALOG_MANAGE), validate(createCategorySchema), asyncHandler(categoryController.create));
 categoryAdminRouter.patch("/:id", ...protectAdmin(PERMISSIONS.CATALOG_MANAGE), validate(updateCategorySchema), asyncHandler(categoryController.update));
+// Registered before "/:id" — otherwise Express would match "bulk" as the
+// :id param and fail categoryIdSchema's numeric coercion before ever
+// reaching the bulk handler.
+categoryAdminRouter.delete("/bulk", ...protectAdmin(PERMISSIONS.CATALOG_MANAGE), validate(categoryBulkDeleteSchema), asyncHandler(categoryController.bulkRemove));
 categoryAdminRouter.delete("/:id", ...protectAdmin(PERMISSIONS.CATALOG_MANAGE), validate(categoryIdSchema), asyncHandler(categoryController.remove));
 
 categoryShopkeeperRouter.use(authenticate, requireActorType(ACTOR_TYPES.SHOPKEEPER), requireApprovedShopkeeper);

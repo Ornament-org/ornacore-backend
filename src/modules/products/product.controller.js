@@ -490,6 +490,59 @@ const adminDelete = async (request, response, next) => {
 };
 
 /*
+  DELETE /admin/products/bulk
+  { "ids": [1, 2, 3] }
+  Same has-existing-orders guard as adminDelete, applied per id — a product
+  referenced in orders is skipped rather than failing the whole batch, so
+  the caller always gets back exactly which ids were deleted vs skipped
+  (and why) instead of an all-or-nothing 400.
+*/
+const adminBulkDelete = async (request, response, next) => {
+  try {
+    const ids = [...new Set(request.validated.body.ids)];
+    const products = await db.Product.findAll({ where: { id: ids } });
+    const foundIds = new Set(products.map((product) => product.id));
+
+    const deletedIds = [];
+    const skipped = [];
+
+    for (const product of products) {
+      const orderItemCount = await db.OrderItem.count({ where: { productId: product.id } });
+      if (orderItemCount > 0) {
+        skipped.push({ id: product.id, name: product.name, reason: "Referenced in existing orders" });
+        continue;
+      }
+
+      await db.sequelize.transaction(async (transaction) => {
+        await auditLogService.record({
+          request,
+          action: "DELETE",
+          module: "products",
+          entityType: "Product",
+          entityId: product.id,
+          oldValue: product.toJSON(),
+          transaction,
+        });
+        await product.destroy({ transaction });
+      });
+      deletedIds.push(product.id);
+    }
+
+    ids.forEach((id) => {
+      if (!foundIds.has(id)) skipped.push({ id, reason: "Not found" });
+    });
+
+    const message = skipped.length
+      ? `${deletedIds.length} product${deletedIds.length === 1 ? "" : "s"} deleted, ${skipped.length} skipped`
+      : `${deletedIds.length} product${deletedIds.length === 1 ? "" : "s"} deleted`;
+
+    response.json(ApiResponse.success({ message, data: { deletedIds, skipped } }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+/*
   POST /admin/products/:id/images
   {
     "images": [
@@ -645,15 +698,26 @@ const buildCatalogWhere = (query) => {
     where.metalId = metalId;
   }
   const andConditions = [];
-  const categoryId = Number(query.categoryId);
-  if (Number.isInteger(categoryId) && categoryId > 0) {
+  // `categoryIds` (comma-separated) lets the storefront match a parent
+  // category together with its subcategories in one query — products are
+  // often mapped to a leaf subcategory, so filtering by the parent id alone
+  // would miss them. `categoryId` (single) is kept for existing callers.
+  const categoryIds = String(query.categoryIds ?? "")
+    .split(",")
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value > 0);
+  const singleCategoryId = Number(query.categoryId);
+  if (!categoryIds.length && Number.isInteger(singleCategoryId) && singleCategoryId > 0) {
+    categoryIds.push(singleCategoryId);
+  }
+  if (categoryIds.length) {
     andConditions.push(
       db.sequelize.literal(
         `EXISTS (
           SELECT 1
           FROM product_category_mappings categoryFilter
           WHERE categoryFilter.product_id = Product.id
-            AND categoryFilter.category_id = ${categoryId}
+            AND categoryFilter.category_id IN (${categoryIds.join(",")})
         )`,
       ),
     );
@@ -849,6 +913,7 @@ export const productController = {
   adminCreate,
   adminUpdate,
   adminDelete,
+  adminBulkDelete,
   adminAddImages,
   adminDeleteImage,
   shopkeeperGetBySlug,

@@ -33,6 +33,14 @@ export const updateCategorySchema = z.object({
   query: z.object({}).passthrough(),
 });
 
+export const categoryBulkDeleteSchema = z.object({
+  body: z.object({
+    ids: z.array(z.coerce.number().int().positive()).min(1).max(100),
+  }),
+  params: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+});
+
 export const categoryIdSchema = z.object({
   body: z.unknown().optional(),
   params: z.object({ id: z.coerce.number().int().positive() }),
