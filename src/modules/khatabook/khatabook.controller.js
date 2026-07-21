@@ -127,6 +127,28 @@ const getShopkeeperLedger = async (request, response) => {
   }
 };
 
+// Shopkeeper's own read-only view of their khatabook ledger — same data and
+// same mapping as the admin one above, just scoped to the authenticated
+// shop's id instead of an admin-supplied shopkeeperId.
+const getCurrentShopkeeperLedger = async (request, response) => {
+  try {
+    const result = await khatabookService.getShopkeeperLedger({
+      shopkeeperId: request.shopkeeper.id,
+      metalId: request.validated.query.metalId,
+      page: request.validated.query.page,
+      pageSize: request.validated.query.pageSize,
+    });
+    response.json(ApiResponse.success(result));
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
 /*
   POST /admin/khatabook/orders
   {
@@ -327,6 +349,8 @@ export const khatabookController = {
   getOrderLedger,
   // Get transaction ledger entries for a shopkeeper metal account
   getShopkeeperLedger,
+  // Same ledger, scoped to the authenticated shopkeeper's own account
+  getCurrentShopkeeperLedger,
   // Create new khatabook order
   createOrder,
   // Preview order calculations without saving

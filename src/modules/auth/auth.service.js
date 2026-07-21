@@ -49,6 +49,8 @@ const normalizeShopkeeperAddress = (payload) => ({
   city: payload.address?.city ?? payload.city,
   state: payload.address?.state ?? payload.state,
   pincode: payload.address?.pincode ?? payload.pincode,
+  latitude: payload.address?.latitude ?? payload.latitude ?? null,
+  longitude: payload.address?.longitude ?? payload.longitude ?? null,
   country: payload.address?.country ?? "India",
   isPrimary: true,
   isActive: true,

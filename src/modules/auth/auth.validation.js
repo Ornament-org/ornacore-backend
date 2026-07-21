@@ -25,6 +25,9 @@ const emptyRequestParts = {
   query: z.object({}).passthrough(),
 };
 
+const latitudeSchema = z.coerce.number().min(-90).max(90);
+const longitudeSchema = z.coerce.number().min(-180).max(180);
+
 const addressSchema = z.object({
   label: z.string().trim().min(2).max(100).default("Primary"),
   contactName: z.string().trim().min(2).max(191).optional(),
@@ -34,6 +37,8 @@ const addressSchema = z.object({
   city: z.string().trim().min(2).max(120),
   state: z.string().trim().min(2).max(120),
   pincode: z.string().trim().min(4).max(12),
+  latitude: latitudeSchema.optional(),
+  longitude: longitudeSchema.optional(),
   country: z.string().trim().min(2).max(80).default("India"),
 });
 
@@ -68,6 +73,8 @@ export const shopkeeperRegistrationSchema = z.object({
       city: z.string().trim().min(2).max(120).optional(),
       state: z.string().trim().min(2).max(120).optional(),
       pincode: z.string().trim().min(4).max(12).optional(),
+      latitude: latitudeSchema.optional(),
+      longitude: longitudeSchema.optional(),
       gstNumber: z.string().trim().toUpperCase().max(32).optional(),
       businessType: z.string().trim().max(100).optional(),
     })

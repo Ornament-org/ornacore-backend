@@ -317,29 +317,12 @@ export const pricingService = {
     });
   },
 
-  async calculateVariantPrice({ shopkeeper, variant, quantity, transaction }) {
+  // Global (priceGroupId: null) pricing-rule lookup — shared by the authenticated
+  // shopkeeper price calculation below and by calculatePublicPrice, since an anonymous
+  // storefront visitor has no shopkeeper/price-group context to apply an override or
+  // group-specific rule against, only the generic rule set applies.
+  async _resolveBaseRulePrice({ variant, quantity, transaction }) {
     const now = new Date();
-    const override = await db.ShopkeeperPriceOverride.findOne({
-      where: {
-        shopkeeperId: shopkeeper.id,
-        productVariantId: variant.id,
-        ...activeDateWhere(now),
-      },
-      order: [["createdAt", "DESC"]],
-      transaction,
-    });
-
-    if (override) {
-      return {
-        unitPrice: new Decimal(override.overridePrice),
-        snapshot: {
-          source: "SHOPKEEPER_OVERRIDE",
-          overrideId: String(override.id),
-          unitPrice: override.overridePrice,
-        },
-      };
-    }
-
     const quantityDecimal = new Decimal(quantity);
     const rules = await db.PricingRule.findAll({
       where: {
@@ -401,5 +384,38 @@ export const pricingService = {
         unitPrice: unitPrice.toFixed(4),
       },
     };
+  },
+
+  async calculateVariantPrice({ shopkeeper, variant, quantity, transaction }) {
+    const override = await db.ShopkeeperPriceOverride.findOne({
+      where: {
+        shopkeeperId: shopkeeper.id,
+        productVariantId: variant.id,
+        ...activeDateWhere(new Date()),
+      },
+      order: [["createdAt", "DESC"]],
+      transaction,
+    });
+
+    if (override) {
+      return {
+        unitPrice: new Decimal(override.overridePrice),
+        snapshot: {
+          source: "SHOPKEEPER_OVERRIDE",
+          overrideId: String(override.id),
+          unitPrice: override.overridePrice,
+        },
+      };
+    }
+
+    return pricingService._resolveBaseRulePrice({ variant, quantity, transaction });
+  },
+
+  // Public/anonymous storefront price — the generic pricing-rule price with no
+  // shopkeeper override and no price-group discount applied, since there's no logged-in
+  // shopkeeper to key either of those off of. This is the "MRP-like" reference price
+  // shown before login; the real wholesale price is calculateVariantPrice's job.
+  async calculatePublicPrice({ variant, quantity, transaction }) {
+    return pricingService._resolveBaseRulePrice({ variant, quantity, transaction });
   },
 };

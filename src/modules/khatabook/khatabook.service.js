@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { Op } from "sequelize";
 import { sequelize } from "../../config/database.js";
 import db from "../../database/models/InitializeModels.js";
+import { ORDER_STATUSES } from "../../constants/app.constants.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { KHATABOOK_COLLECTION_TYPES } from "./khatabook.constants.js";
 import { khatabookRepository } from "./khatabook.repository.js";
@@ -233,6 +234,45 @@ const getMetalAccountSummary = async (shopkeeperId, metalId, options = {}) => {
   };
 };
 
+// A shopkeeper's web-placed order can be handed over physically as part of a
+// khatabook delivery. Linking it here marks it DELIVERED so it stops showing
+// as pending, without re-running catalog inventory/accounts-ledger side effects
+// that belong to the normal admin order-status flow — the khatabook order is
+// already the source of truth for the metal ledger movement.
+const fulfillSourceOrders = async ({ khatabookOrder, sourceOrderIds, request, transaction }) => {
+  const orders = await db.Order.findAll({
+    where: {
+      id: sourceOrderIds,
+      shopkeeperId: khatabookOrder.shopkeeperId,
+      status: { [Op.notIn]: [ORDER_STATUSES.DELIVERED, ORDER_STATUSES.CANCELLED] },
+    },
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
+
+  for (const sourceOrder of orders) {
+    const fromStatus = sourceOrder.status;
+    await sourceOrder.update(
+      {
+        status: ORDER_STATUSES.DELIVERED,
+        deliveredAt: new Date(),
+        fulfilledByKhatabookOrderId: khatabookOrder.id,
+      },
+      { transaction },
+    );
+    await db.OrderStatusHistory.create(
+      {
+        orderId: sourceOrder.id,
+        fromStatus,
+        toStatus: ORDER_STATUSES.DELIVERED,
+        note: `Fulfilled via Khatabook order ${khatabookOrder.orderNumber}`,
+        changedByUserId: request?.auth?.sub ?? null,
+      },
+      { transaction },
+    );
+  }
+};
+
 export const khatabookService = {
   async previewOrder(payload) {
     return khatabookSettlementEngine.previewOrder(payload);
@@ -385,6 +425,14 @@ export const khatabookService = {
         request,
         transaction,
       });
+      if (payload.sourceOrderIds?.length) {
+        await fulfillSourceOrders({
+          khatabookOrder: order,
+          sourceOrderIds: payload.sourceOrderIds,
+          request,
+          transaction,
+        });
+      }
       const reloadedOrder = await khatabookRepository.findOrderById(order.id, { transaction });
       const metalAccount = await getMetalAccountSummary(order.shopkeeperId, order.metalId, {
         transaction,

@@ -1,4 +1,8 @@
+import { ACTOR_TYPES } from "../../constants/app.constants.js";
 import { PERMISSIONS } from "../../constants/permissions.js";
+import { authenticate } from "../../middlewares/authenticate.js";
+import { requireActorType } from "../../middlewares/requireActorType.js";
+import { requireApprovedShopkeeper } from "../../middlewares/requireApprovedShopkeeper.js";
 import { validate } from "../../middlewares/validate.js";
 import { protectAdmin } from "../../shared/http/adminRoute.js";
 import { asyncHandler } from "../../shared/http/asyncHandler.js";
@@ -10,6 +14,7 @@ import {
   createAccountCashCollectionSchema,
   createAccountMetalCollectionSchema,
   createOrderSchema,
+  currentShopkeeperLedgerSchema,
   ledgerQuerySchema,
   orderLedgerSchema,
   orderParamSchema,
@@ -20,6 +25,7 @@ import {
 } from "./khatabook.validator.js";
 
 export const khatabookAdminRouter = createModuleRouter();
+export const khatabookShopkeeperRouter = createModuleRouter();
 
 khatabookAdminRouter.get(
   "/metals-summary",
@@ -169,4 +175,19 @@ khatabookAdminRouter.post(
   ...protectAdmin(PERMISSIONS.KHATABOOK_ADD_PAYMENT),
   validate(addCashCollectionSchema),
   asyncHandler(khatabookController.addCashCollection),
+);
+
+khatabookShopkeeperRouter.use(
+  authenticate,
+  requireActorType(ACTOR_TYPES.SHOPKEEPER),
+  requireApprovedShopkeeper,
+);
+
+// Read-only — a shop can see its own khatabook ledger (what staff has
+// recorded for deliveries and cash/metal collections against their
+// account) but has no write access to any of it.
+khatabookShopkeeperRouter.get(
+  "/ledger",
+  validate(currentShopkeeperLedgerSchema),
+  asyncHandler(khatabookController.getCurrentShopkeeperLedger),
 );

@@ -82,6 +82,14 @@ const envSchema = z.object({
   COOKIE_SECURE: booleanString,
   COOKIE_SAME_SITE: z.enum(["strict", "lax", "none"]).default("lax"),
   COOKIE_DOMAIN: optionalString,
+
+  METAL_RATE_SYNC_ENABLED: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value !== "false"),
+  METAL_RATE_SYNC_INTERVAL_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
+  METAL_RATE_SYNC_URL: z.url().default("https://bullions.co.in/location/bihar/"),
+  METAL_RATE_SYNC_LOCATION: z.string().min(1).default("Bihar"),
 });
 
 const parsed = envSchema.safeParse(process.env);

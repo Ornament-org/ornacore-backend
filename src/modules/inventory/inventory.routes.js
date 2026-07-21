@@ -5,7 +5,7 @@ import { asyncHandler } from "../../shared/http/asyncHandler.js";
 import { idParamSchema, listQuerySchema } from "../../shared/http/crud.validation.js";
 import { createModuleRouter } from "../module.router.js";
 import { inventoryController } from "./inventory.controller.js";
-import { adjustmentSchema } from "./inventory.validation.js";
+import { adjustmentSchema, variantAdjustmentSchema } from "./inventory.validation.js";
 
 export const inventoryAdminRouter = createModuleRouter();
 
@@ -35,4 +35,11 @@ inventoryAdminRouter.post(
   ...protectAdmin(PERMISSIONS.INVENTORY_UPDATE),
   validate(adjustmentSchema),
   asyncHandler(inventoryController.adjust),
+);
+
+inventoryAdminRouter.post(
+  "/variant/:variantId/adjust",
+  ...protectAdmin(PERMISSIONS.INVENTORY_UPDATE),
+  validate(variantAdjustmentSchema),
+  asyncHandler(inventoryController.adjustByVariant),
 );

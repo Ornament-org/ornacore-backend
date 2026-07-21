@@ -5,6 +5,7 @@ import catalogAssociations from "./associations/catalog.associations.js";
 import commerceAssociations from "./associations/commerce.associations.js";
 import operationsAssociations from "./associations/operations.associations.js";
 import ledgerAssociations from "./associations/ledger.associations.js";
+import contentAssociations from "./associations/content.associations.js";
 
 const db = {};
 
@@ -32,8 +33,17 @@ db.ShopkeeperMetalCreditLimit = (
 
 // Catalog and media models
 db.Media = (await import("../../modules/media/media.model.js")).default;
+db.MediaFolder = (await import("../../modules/media/media-folder.model.js")).default;
 db.Metal = (await import("../../modules/metals/metal.model.js")).default;
+db.MetalRate = (await import("../../modules/metal-rates/metal-rate.model.js")).default;
 db.Category = (await import("../../modules/categories/category.model.js")).default;
+db.Collection = (await import("../../modules/collections/collection.model.js")).default;
+db.CollectionProduct = (
+  await import("../../modules/collections/collection-product.model.js")
+).default;
+db.CollectionCategory = (
+  await import("../../modules/collections/collection-category.model.js")
+).default;
 db.Product = (await import("../../modules/products/product.model.js")).default;
 db.ProductCategoryMapping = (
   await import("../../modules/products/product-category-mapping.model.js")
@@ -104,10 +114,24 @@ db.ProductVariantAttribute = (
   await import("../../modules/attributes/product-variant-attribute.model.js")
 ).default;
 
+// Homepage CMS models
+db.HomepageConfig = (await import("../../modules/homepage/homepage-config.model.js")).default;
+db.HomepageSection = (await import("../../modules/homepage/homepage-section.model.js")).default;
+
+// Banner management models
+db.BannerPlaceholder = (
+  await import("../../modules/banners/banner-placeholder.model.js")
+).default;
+db.Banner = (await import("../../modules/banners/banner.model.js")).default;
+
+// Store settings (branding)
+db.StoreSettings = (await import("../../modules/settings/store-settings.model.js")).default;
+
 identityAssociations(db);
 catalogAssociations(db);
 commerceAssociations(db);
 operationsAssociations(db);
 ledgerAssociations(db);
+contentAssociations(db);
 
 export default db;

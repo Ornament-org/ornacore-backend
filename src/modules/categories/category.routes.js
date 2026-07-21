@@ -17,6 +17,7 @@ import {
 
 export const categoryAdminRouter = createModuleRouter();
 export const categoryShopkeeperRouter = createModuleRouter();
+export const categoryPublicRouter = createModuleRouter();
 
 categoryAdminRouter.get("/", ...protectAdmin(PERMISSIONS.CATALOG_MANAGE), validate(categoryListSchema), asyncHandler(categoryController.list));
 categoryAdminRouter.get("/tree", ...protectAdmin(PERMISSIONS.CATALOG_MANAGE), asyncHandler(categoryController.tree));
@@ -28,3 +29,9 @@ categoryAdminRouter.delete("/:id", ...protectAdmin(PERMISSIONS.CATALOG_MANAGE), 
 categoryShopkeeperRouter.use(authenticate, requireActorType(ACTOR_TYPES.SHOPKEEPER), requireApprovedShopkeeper);
 categoryShopkeeperRouter.get("/tree", asyncHandler(categoryController.shopkeeperTree));
 categoryShopkeeperRouter.get("/", asyncHandler(categoryController.shopkeeperList));
+
+// Fully unauthenticated — the storefront needs active categories before any shopkeeper
+// login exists. Reuses the same ACTIVE-only, image-included query as the shopkeeper
+// router (categoryController.shopkeeperList/shopkeeperTree take no auth-derived data).
+categoryPublicRouter.get("/tree", asyncHandler(categoryController.shopkeeperTree));
+categoryPublicRouter.get("/", asyncHandler(categoryController.shopkeeperList));

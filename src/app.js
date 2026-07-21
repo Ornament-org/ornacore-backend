@@ -13,6 +13,13 @@ import { AppError } from "./shared/errors/AppError.js";
 import adminRoutes from "./routes/admin.routes.js";
 import shopkeeperRoutes from "./routes/shopkeeper.routes.js";
 import { featureFlagPublicRouter } from "./modules/feature-flags/feature-flag.routes.js";
+import { homepagePublicRouter } from "./modules/homepage/homepage.routes.js";
+import { storeSettingsPublicRouter } from "./modules/settings/store-settings.routes.js";
+import { categoryPublicRouter } from "./modules/categories/category.routes.js";
+import { productPublicRouter } from "./modules/products/product.routes.js";
+import { collectionPublicRouter } from "./modules/collections/collection.routes.js";
+import { metalPublicRouter } from "./modules/metals/metal.routes.js";
+import { bannerPublicRouter } from "./modules/banners/banner.routes.js";
 
 export const createApp = () => {
   const app = express();
@@ -64,9 +71,23 @@ export const createApp = () => {
   app.use("/api/v1/admin", adminRoutes);
   app.use("/api/v1/shopkeeper", shopkeeperRoutes);
   app.use("/api/v1/config", featureFlagPublicRouter);
+  app.use("/api/v1/homepage", homepagePublicRouter);
+  app.use("/api/v1/store-settings", storeSettingsPublicRouter);
+  app.use("/api/v1/categories", categoryPublicRouter);
+  app.use("/api/v1/products", productPublicRouter);
+  app.use("/api/v1/collections", collectionPublicRouter);
+  app.use("/api/v1/metals", metalPublicRouter);
+  app.use("/api/v1/banners", bannerPublicRouter);
   app.use("/admin", adminRoutes);
   app.use("/shopkeeper", shopkeeperRoutes);
   app.use("/config", featureFlagPublicRouter);
+  app.use("/homepage", homepagePublicRouter);
+  app.use("/store-settings", storeSettingsPublicRouter);
+  app.use("/categories", categoryPublicRouter);
+  app.use("/products", productPublicRouter);
+  app.use("/collections", collectionPublicRouter);
+  app.use("/metals", metalPublicRouter);
+  app.use("/banners", bannerPublicRouter);
 
   app.use(notFound);
   app.use(errorHandler);

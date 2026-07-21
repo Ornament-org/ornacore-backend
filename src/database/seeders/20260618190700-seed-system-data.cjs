@@ -18,6 +18,7 @@ const permissionCatalog = [
   ["Shopkeeper", "Block", "shopkeeper.block", "Block shopkeeper accounts permanently"],
   ["Shopkeeper", "Credit Limit Update", "shopkeeper.credit_limit.update", "Update shopkeeper credit limit"],
   ["Catalog", "Manage", "catalog.manage", "Manage product categories and catalog structure"],
+  ["Content", "Manage", "content.manage", "Manage app homepage and CMS content"],
   ["Media", "Manage", "media.manage", "Upload and manage media files"],
   ["Product", "Manage", "product.manage", "Create, update, and delete products"],
   ["Product", "View", "product.view", "View products"],
@@ -116,10 +117,10 @@ const roles = [
 ];
 
 const metals = [
-  ["GOLD", "Gold", 1],
-  ["SILVER", "Silver", 2],
-  ["DIAMOND", "Diamond", 3],
-  ["PLATINUM", "Platinum", 4],
+  ["GOLD", "Gold", 1, "PER_10G"],
+  ["SILVER", "Silver", 2, "PER_KG"],
+  ["DIAMOND", "Diamond", 3, "PER_10G"],
+  ["PLATINUM", "Platinum", 4, "PER_10G"],
 ];
 
 const priceGroups = [
@@ -195,14 +196,15 @@ module.exports = {
       replacements: [roles.map((role) => role.code)],
     });
 
-    for (const [code, name, displayOrder] of metals) {
+    for (const [code, name, displayOrder, rateUnit] of metals) {
       await queryInterface.sequelize.query(
-        `INSERT INTO metals (code, name, description, is_active, display_order, created_at, updated_at)
-         VALUES (?, ?, ?, true, ?, ?, ?)
+        `INSERT INTO metals (code, name, description, is_active, display_order, rate_unit, created_at, updated_at)
+         VALUES (?, ?, ?, true, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE name = VALUES(name), is_active = true,
-           display_order = VALUES(display_order), updated_at = VALUES(updated_at)`,
+           display_order = VALUES(display_order), rate_unit = VALUES(rate_unit),
+           updated_at = VALUES(updated_at)`,
         {
-          replacements: [code, name, `${name} jewelry`, displayOrder, now, now],
+          replacements: [code, name, `${name} jewelry`, displayOrder, rateUnit, now, now],
         },
       );
     }

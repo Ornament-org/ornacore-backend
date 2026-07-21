@@ -8,8 +8,40 @@ export default function catalogAssociations(db) {
   db.Category.belongsTo(db.User, { foreignKey: "createdByUserId", as: "createdBy" });
   db.Category.belongsTo(db.User, { foreignKey: "updatedByUserId", as: "updatedBy" });
 
+  db.Collection.belongsTo(db.Media, { foreignKey: "mediaId", as: "image" });
+  db.Collection.belongsTo(db.User, { foreignKey: "createdByUserId", as: "createdBy" });
+  db.Collection.belongsTo(db.User, { foreignKey: "updatedByUserId", as: "updatedBy" });
+  db.Collection.belongsTo(db.Metal, { foreignKey: "metalId", as: "metal" });
+  db.Metal.hasMany(db.Collection, { foreignKey: "metalId", as: "collections" });
+
+  db.Collection.hasMany(db.CollectionProduct, {
+    foreignKey: "collectionId",
+    as: "productLinks",
+  });
+  db.CollectionProduct.belongsTo(db.Collection, {
+    foreignKey: "collectionId",
+    as: "collection",
+  });
+  db.CollectionProduct.belongsTo(db.Product, { foreignKey: "productId", as: "product" });
+  db.Product.hasMany(db.CollectionProduct, { foreignKey: "productId", as: "collectionLinks" });
+
+  db.Collection.hasMany(db.CollectionCategory, {
+    foreignKey: "collectionId",
+    as: "categoryLinks",
+  });
+  db.CollectionCategory.belongsTo(db.Collection, {
+    foreignKey: "collectionId",
+    as: "collection",
+  });
+  db.CollectionCategory.belongsTo(db.Category, { foreignKey: "categoryId", as: "category" });
+  db.Category.hasMany(db.CollectionCategory, { foreignKey: "categoryId", as: "collectionLinks" });
+
   db.Product.belongsTo(db.Metal, { foreignKey: "metalId", as: "metal" });
   db.Metal.hasMany(db.Product, { foreignKey: "metalId", as: "products" });
+
+  db.Metal.hasMany(db.MetalRate, { foreignKey: "metalId", as: "rates" });
+  db.MetalRate.belongsTo(db.Metal, { foreignKey: "metalId", as: "metal" });
+  db.MetalRate.belongsTo(db.User, { foreignKey: "createdByUserId", as: "createdBy" });
   db.Product.hasMany(db.ProductCategoryMapping, {
     foreignKey: "productId",
     as: "categoryMappings",

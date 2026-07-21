@@ -9,10 +9,11 @@ import { asyncHandler } from "../../shared/http/asyncHandler.js";
 import { idParamSchema, listQuerySchema } from "../../shared/http/crud.validation.js";
 import { createModuleRouter } from "../module.router.js";
 import { productController } from "./product.controller.js";
-import { createSchema, updateSchema, imageSchema, imageIdSchema } from "./product.validation.js";
+import { createSchema, updateSchema, imageSchema, imageIdSchema, slugParamSchema } from "./product.validation.js";
 
 export const productAdminRouter = createModuleRouter();
 export const productShopkeeperRouter = createModuleRouter();
+export const productPublicRouter = createModuleRouter();
 
 productAdminRouter.get(
   "/",
@@ -69,4 +70,23 @@ productShopkeeperRouter.get(
   requireActorType(ACTOR_TYPES.SHOPKEEPER),
   requireApprovedShopkeeper,
   asyncHandler(productController.shopkeeperList),
+);
+
+productShopkeeperRouter.get(
+  "/slug/:slug",
+  authenticate,
+  requireActorType(ACTOR_TYPES.SHOPKEEPER),
+  requireApprovedShopkeeper,
+  validate(slugParamSchema),
+  asyncHandler(productController.shopkeeperGetBySlug),
+);
+
+// Fully unauthenticated — active products with a login-free reference price, for the
+// public storefront (see productController.publicList / pricingService.calculatePublicPrice).
+productPublicRouter.get("/", asyncHandler(productController.publicList));
+
+productPublicRouter.get(
+  "/slug/:slug",
+  validate(slugParamSchema),
+  asyncHandler(productController.publicGetBySlug),
 );

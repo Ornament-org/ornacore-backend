@@ -9,13 +9,17 @@ export const mediaAdminRouter = createModuleRouter();
 
 mediaAdminRouter.use(...protectAdmin(PERMISSIONS.MEDIA_MANAGE));
 
-mediaAdminRouter.get(
-  "/",
-  asyncHandler(mediaController.list),
-);
+// Named paths must be registered before /:id so Express matches them first
+mediaAdminRouter.get("/folders", asyncHandler(mediaController.listFolders));
+mediaAdminRouter.post("/folders", asyncHandler(mediaController.createFolder));
+mediaAdminRouter.put("/folders/:id", asyncHandler(mediaController.updateFolder));
+mediaAdminRouter.delete("/folders/:id", asyncHandler(mediaController.deleteFolder));
 
-mediaAdminRouter.post(
-  "/",
-  mediaUpload.array("files", 10),
-  asyncHandler(mediaController.upload),
-);
+mediaAdminRouter.get("/", asyncHandler(mediaController.list));
+mediaAdminRouter.post("/", mediaUpload.array("files", 10), asyncHandler(mediaController.upload));
+
+mediaAdminRouter.get("/:id", asyncHandler(mediaController.get));
+mediaAdminRouter.patch("/:id", asyncHandler(mediaController.update));
+mediaAdminRouter.delete("/:id", asyncHandler(mediaController.trash));
+mediaAdminRouter.post("/:id/restore", asyncHandler(mediaController.restore));
+mediaAdminRouter.delete("/:id/purge", asyncHandler(mediaController.purge));

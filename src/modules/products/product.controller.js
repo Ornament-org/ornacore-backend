@@ -4,6 +4,7 @@ import db from "../../database/models/InitializeModels.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
 import { slugify } from "../../shared/utils/slugify.js";
+import { attributeService } from "../attributes/attribute.service.js";
 import { auditLogService } from "../audit-logs/audit-log.service.js";
 import { pricingService } from "../pricing/pricing.service.js";
 
@@ -19,7 +20,15 @@ export const productInclude = [
     model: db.ProductVariant,
     as: "variants",
     required: false,
-    include: [{ model: db.Inventory, as: "inventory", required: false }],
+    include: [
+      { model: db.Inventory, as: "inventory", required: false },
+      {
+        model: db.AttributeValue,
+        as: "attributeValues",
+        required: false,
+        include: [{ model: db.Attribute, as: "attribute", required: false }],
+      },
+    ],
   },
   {
     model: db.ProductImage,
@@ -28,6 +37,11 @@ export const productInclude = [
     include: [{ model: db.Media, as: "media", required: false }],
   },
 ];
+
+const buildSlugSeed = (name, designCode) => {
+  const base = [name, designCode].filter(Boolean).join("-");
+  return designCode ? base : `${base}-${Date.now().toString(36)}`;
+};
 
 const assertMetalExists = async (metalId, transaction) => {
   const exists = await db.Metal.count({ where: { id: metalId, isActive: true }, transaction });
@@ -116,6 +130,8 @@ const createVariantRecords = async ({ product, variants, request, transaction })
         name: variantInput.name ?? null,
         purity: variantInput.purity ?? null,
         karat: variantInput.karat ?? null,
+        publicPurity: variantInput.publicPurity ?? null,
+        publicKarat: variantInput.publicKarat ?? null,
         tunch: variantInput.tunch ?? null,
         weightGrams: variantInput.weightGrams ?? null,
         minimumOrderQuantity: variantInput.minimumOrderQuantity,
@@ -124,6 +140,11 @@ const createVariantRecords = async ({ product, variants, request, transaction })
       },
       { transaction },
     );
+    if (variantInput.attributeValueIds !== undefined) {
+      await attributeService.syncVariantAttributes(variant.id, variantInput.attributeValueIds, {
+        transaction,
+      });
+    }
     await db.Inventory.create(
       {
         productVariantId: variant.id,
@@ -168,7 +189,7 @@ const createVariantRecords = async ({ product, variants, request, transaction })
   }
 };
 
-const adminList = async (request, response) => {
+const adminList = async (request, response, next) => {
   try {
     const { page, pageSize, search, status, metalId, categoryId } = request.validated.query;
     const where = {};
@@ -215,16 +236,11 @@ const adminList = async (request, response) => {
       }),
     );
   } catch (error) {
-    response.status(error.statusCode || 500).json(
-      ApiResponse.error({
-        code: error.code || "INTERNAL_ERROR",
-        message: error.message || "An unexpected error occurred",
-      }),
-    );
+    next(error);
   }
 };
 
-const adminGetById = async (request, response) => {
+const adminGetById = async (request, response, next) => {
   try {
     const product = await db.Product.findByPk(request.validated.params.id, {
       include: productInclude,
@@ -237,12 +253,7 @@ const adminGetById = async (request, response) => {
     }
     response.json(ApiResponse.success({ data: product }));
   } catch (error) {
-    response.status(error.statusCode || 500).json(
-      ApiResponse.error({
-        code: error.code || "INTERNAL_ERROR",
-        message: error.message || "An unexpected error occurred",
-      }),
-    );
+    next(error);
   }
 };
 
@@ -270,7 +281,7 @@ const adminGetById = async (request, response) => {
     ]
   }
 */
-const adminCreate = async (request, response) => {
+const adminCreate = async (request, response, next) => {
   try {
     const { variants, categoryMappings, ...payload } = request.validated.body;
     const product = await db.sequelize.transaction(async (transaction) => {
@@ -278,7 +289,7 @@ const adminCreate = async (request, response) => {
       const created = await db.Product.create(
         {
           ...payload,
-          slug: slugify(payload.slug || `${payload.name}-${payload.designCode}`),
+          slug: slugify(payload.slug || buildSlugSeed(payload.name, payload.designCode)),
           createdByUserId: request.auth.sub,
           updatedByUserId: request.auth.sub,
           publishedAt: payload.status === PRODUCT_STATUSES.ACTIVE ? new Date() : null,
@@ -311,12 +322,7 @@ const adminCreate = async (request, response) => {
       }),
     );
   } catch (error) {
-    response.status(error.statusCode || 500).json(
-      ApiResponse.error({
-        code: error.code || "INTERNAL_ERROR",
-        message: error.message || "An unexpected error occurred",
-      }),
-    );
+    next(error);
   }
 };
 
@@ -329,7 +335,7 @@ const adminCreate = async (request, response) => {
     "variants": [{ "id": 7, "sku": "RNG-001-22K", "tunch": 92.0 }]
   }
 */
-const adminUpdate = async (request, response) => {
+const adminUpdate = async (request, response, next) => {
   try {
     const product = await db.Product.findByPk(request.validated.params.id);
     if (!product) {
@@ -365,7 +371,7 @@ const adminUpdate = async (request, response) => {
             ? {
                 slug: slugify(
                   payload.slug ||
-                    `${payload.name ?? product.name}-${payload.designCode ?? product.designCode}`,
+                    buildSlugSeed(payload.name ?? product.name, payload.designCode ?? product.designCode),
                 ),
               }
             : {}),
@@ -403,6 +409,8 @@ const adminUpdate = async (request, response) => {
                 name: variantInput.name ?? null,
                 purity: variantInput.purity ?? null,
                 karat: variantInput.karat ?? null,
+                publicPurity: variantInput.publicPurity ?? null,
+                publicKarat: variantInput.publicKarat ?? null,
                 tunch: variantInput.tunch ?? null,
                 weightGrams: variantInput.weightGrams ?? null,
                 minimumOrderQuantity: variantInput.minimumOrderQuantity,
@@ -411,6 +419,11 @@ const adminUpdate = async (request, response) => {
               },
               { transaction },
             );
+            if (variantInput.attributeValueIds !== undefined) {
+              await attributeService.syncVariantAttributes(variant.id, variantInput.attributeValueIds, {
+                transaction,
+              });
+            }
           } else {
             await createVariantRecords({
               product,
@@ -429,12 +442,7 @@ const adminUpdate = async (request, response) => {
       }),
     );
   } catch (error) {
-    response.status(error.statusCode || 500).json(
-      ApiResponse.error({
-        code: error.code || "INTERNAL_ERROR",
-        message: error.message || "An unexpected error occurred",
-      }),
-    );
+    next(error);
   }
 };
 
@@ -442,7 +450,7 @@ const adminUpdate = async (request, response) => {
   DELETE /admin/products/:id
   (no body — fails with 400 if product has existing orders)
 */
-const adminDelete = async (request, response) => {
+const adminDelete = async (request, response, next) => {
   try {
     const product = await db.Product.findByPk(request.validated.params.id);
     if (!product) {
@@ -477,12 +485,7 @@ const adminDelete = async (request, response) => {
 
     response.json(ApiResponse.success({ message: "Product deleted successfully" }));
   } catch (error) {
-    response.status(error.statusCode || 500).json(
-      ApiResponse.error({
-        code: error.code || "INTERNAL_ERROR",
-        message: error.message || "An unexpected error occurred",
-      }),
-    );
+    next(error);
   }
 };
 
@@ -495,7 +498,7 @@ const adminDelete = async (request, response) => {
     ]
   }
 */
-const adminAddImages = async (request, response) => {
+const adminAddImages = async (request, response, next) => {
   try {
     const product = await db.Product.findByPk(request.validated.params.id);
     if (!product) {
@@ -504,14 +507,10 @@ const adminAddImages = async (request, response) => {
         code: "PRODUCT_NOT_FOUND",
       });
     }
+    let skippedCount = 0;
     const images = await db.sequelize.transaction(async (transaction) => {
       const payload = request.validated.body.images;
-      if (payload.some((image) => image.isPrimary)) {
-        await db.ProductImage.update(
-          { isPrimary: false },
-          { where: { productId: product.id }, transaction },
-        );
-      }
+
       for (const image of payload) {
         const media = await db.Media.findByPk(image.mediaId, { transaction });
         if (!media) {
@@ -533,38 +532,73 @@ const adminAddImages = async (request, response) => {
           }
         }
       }
-      return db.ProductImage.bulkCreate(
-        payload.map((image, index) => ({
-          productId: product.id,
-          productVariantId: image.productVariantId ?? null,
-          mediaId: image.mediaId,
-          altText: image.altText ?? product.name,
-          isPrimary: image.isPrimary ?? index === 0,
-          displayOrder: image.displayOrder ?? index,
-        })),
-        { transaction },
-      );
+
+      if (payload.some((image) => image.isPrimary)) {
+        await db.ProductImage.update(
+          { isPrimary: false },
+          { where: { productId: product.id }, transaction },
+        );
+      }
+
+      // (product_id, media_id) is unique — the same media can't be attached
+      // to a product twice. Re-selecting an already-attached image (e.g. to
+      // mark it primary) updates that existing row instead of failing the
+      // whole batch on the DB's unique-constraint error.
+      const existingRows = await db.ProductImage.findAll({
+        where: { productId: product.id, mediaId: payload.map((image) => image.mediaId) },
+        transaction,
+      });
+      const existingByMedia = new Map(existingRows.map((row) => [String(row.mediaId), row]));
+
+      const created = [];
+      for (const [index, image] of payload.entries()) {
+        const existingRow = existingByMedia.get(String(image.mediaId));
+        if (existingRow) {
+          skippedCount += 1;
+          await existingRow.update(
+            {
+              isPrimary: image.isPrimary ?? existingRow.isPrimary,
+              altText: image.altText ?? existingRow.altText,
+              displayOrder: image.displayOrder ?? existingRow.displayOrder,
+              productVariantId: image.productVariantId ?? existingRow.productVariantId,
+            },
+            { transaction },
+          );
+          continue;
+        }
+        const row = await db.ProductImage.create(
+          {
+            productId: product.id,
+            productVariantId: image.productVariantId ?? null,
+            mediaId: image.mediaId,
+            altText: image.altText ?? product.name,
+            isPrimary: image.isPrimary ?? index === 0,
+            displayOrder: image.displayOrder ?? index,
+          },
+          { transaction },
+        );
+        created.push(row);
+      }
+      return created;
     });
-    response.status(201).json(
+
+    const skippedNote = skippedCount
+      ? ` (${skippedCount} already attached — updated instead)`
+      : "";
+    response.status(images.length ? 201 : 200).json(
       ApiResponse.success({
-        message:
-          images.length === 1
-            ? "Product image added successfully"
-            : `${images.length} product images added successfully`,
+        message: images.length
+          ? `${images.length} product image${images.length === 1 ? "" : "s"} added successfully${skippedNote}`
+          : `No new images added — all selected images were already attached to this product${skippedNote ? ", details updated" : ""}.`,
         data: images,
       }),
     );
   } catch (error) {
-    response.status(error.statusCode || 500).json(
-      ApiResponse.error({
-        code: error.code || "INTERNAL_ERROR",
-        message: error.message || "An unexpected error occurred",
-      }),
-    );
+    next(error);
   }
 };
 
-const adminDeleteImage = async (request, response) => {
+const adminDeleteImage = async (request, response, next) => {
   try {
     await db.sequelize.transaction(async (transaction) => {
       const image = await db.ProductImage.findOne({
@@ -600,43 +634,70 @@ const adminDeleteImage = async (request, response) => {
     });
     response.json(ApiResponse.success({ message: "Product image removed" }));
   } catch (error) {
-    response.status(error.statusCode || 500).json(
-      ApiResponse.error({
-        code: error.code || "INTERNAL_ERROR",
-        message: error.message || "An unexpected error occurred",
-      }),
-    );
+    next(error);
   }
 };
 
-const shopkeeperList = async (request, response) => {
-  try {
-    const where = { status: PRODUCT_STATUSES.ACTIVE };
-    const metalId = Number(request.query.metalId);
-    if (Number.isInteger(metalId) && metalId > 0) {
-      where.metalId = metalId;
-    }
-    const categoryId = Number(request.query.categoryId);
-    if (Number.isInteger(categoryId) && categoryId > 0) {
-      where[Op.and] = [
-        db.sequelize.literal(
-          `EXISTS (
+const buildCatalogWhere = (query) => {
+  const where = { status: PRODUCT_STATUSES.ACTIVE };
+  const metalId = Number(query.metalId);
+  if (Number.isInteger(metalId) && metalId > 0) {
+    where.metalId = metalId;
+  }
+  const andConditions = [];
+  const categoryId = Number(query.categoryId);
+  if (Number.isInteger(categoryId) && categoryId > 0) {
+    andConditions.push(
+      db.sequelize.literal(
+        `EXISTS (
+          SELECT 1
+          FROM product_category_mappings categoryFilter
+          WHERE categoryFilter.product_id = Product.id
+            AND categoryFilter.category_id = ${categoryId}
+        )`,
+      ),
+    );
+  }
+  if (query.collection) {
+    const collectionSlug = db.sequelize.escape(String(query.collection));
+    andConditions.push(
+      db.sequelize.literal(
+        `(
+          EXISTS (
             SELECT 1
-            FROM product_category_mappings categoryFilter
-            WHERE categoryFilter.product_id = Product.id
-              AND categoryFilter.category_id = ${categoryId}
-          )`,
-        ),
-      ];
-    }
-    if (request.query.search) {
-      where[Op.or] = [
-        { name: { [Op.like]: `%${request.query.search}%` } },
-        { designCode: { [Op.like]: `%${request.query.search}%` } },
-      ];
-    }
+            FROM collection_products collectionFilter
+            JOIN collections collectionJoin ON collectionJoin.id = collectionFilter.collection_id
+            WHERE collectionFilter.product_id = Product.id
+              AND collectionJoin.slug = ${collectionSlug}
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM collection_categories collectionCategoryFilter
+            JOIN collections collectionCategoryJoin
+              ON collectionCategoryJoin.id = collectionCategoryFilter.collection_id
+            JOIN product_category_mappings categoryProductFilter
+              ON categoryProductFilter.category_id = collectionCategoryFilter.category_id
+            WHERE categoryProductFilter.product_id = Product.id
+              AND collectionCategoryJoin.slug = ${collectionSlug}
+          )
+        )`,
+      ),
+    );
+  }
+  if (andConditions.length) where[Op.and] = andConditions;
+  if (query.search) {
+    where[Op.or] = [
+      { name: { [Op.like]: `%${query.search}%` } },
+      { designCode: { [Op.like]: `%${query.search}%` } },
+    ];
+  }
+  return where;
+};
+
+const shopkeeperList = async (request, response, next) => {
+  try {
     const rows = await db.Product.findAll({
-      where,
+      where: buildCatalogWhere(request.query),
       include: productInclude,
       order: [["publishedAt", "DESC"]],
       limit: Math.min(Number(request.query.limit) || 20, 100),
@@ -667,12 +728,118 @@ const shopkeeperList = async (request, response) => {
     );
     response.json(ApiResponse.success({ data }));
   } catch (error) {
-    response.status(error.statusCode || 500).json(
-      ApiResponse.error({
-        code: error.code || "INTERNAL_ERROR",
-        message: error.message || "An unexpected error occurred",
+    next(error);
+  }
+};
+
+// Fully unauthenticated — no shopkeeper to price against, so every variant carries a
+// `publicPrice` computed from the generic (priceGroupId: null) pricing rules only, with
+// no shopkeeper override/discount applied. This is the "before login" reference price;
+// shopkeeperList's `yourPrice` is the real wholesale price once a shopkeeper is signed in.
+const publicList = async (request, response, next) => {
+  try {
+    const rows = await db.Product.findAll({
+      where: buildCatalogWhere(request.query),
+      include: productInclude,
+      order: [["publishedAt", "DESC"]],
+      limit: Math.min(Number(request.query.limit) || 20, 100),
+    });
+    const data = await Promise.all(
+      rows.map(async (product) => {
+        const plain = product.toJSON();
+        plain.variants = await Promise.all(
+          product.variants.map(async (variant) => {
+            try {
+              const price = await pricingService.calculatePublicPrice({
+                variant,
+                quantity: variant.minimumOrderQuantity,
+              });
+              return { ...variant.toJSON(), publicPrice: price.unitPrice.toFixed(4) };
+            } catch {
+              return { ...variant.toJSON(), publicPrice: null };
+            }
+          }),
+        );
+        return plain;
       }),
     );
+    response.json(ApiResponse.success({ data }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Product detail pages are addressed by slug, not id — matches shopkeeperList's
+// pricing shape (yourPrice) so the detail page and the listing cards it's
+// linked from render the exact same price for the same shopkeeper.
+const shopkeeperGetBySlug = async (request, response, next) => {
+  try {
+    const product = await db.Product.findOne({
+      where: { slug: request.validated.params.slug, status: PRODUCT_STATUSES.ACTIVE },
+      include: productInclude,
+    });
+    if (!product) {
+      throw new AppError("Product not found", {
+        statusCode: 404,
+        code: "PRODUCT_NOT_FOUND",
+      });
+    }
+    const plain = product.toJSON();
+    plain.variants = await Promise.all(
+      product.variants.map(async (variant) => {
+        try {
+          const price = await pricingService.calculateVariantPrice({
+            shopkeeper: request.shopkeeper,
+            variant,
+            quantity: variant.minimumOrderQuantity,
+          });
+          return {
+            ...variant.toJSON(),
+            yourPrice: price.unitPrice.toFixed(4),
+            pricingSnapshot: price.snapshot,
+          };
+        } catch {
+          return { ...variant.toJSON(), yourPrice: null };
+        }
+      }),
+    );
+    response.json(ApiResponse.success({ data: plain }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Fully unauthenticated counterpart of shopkeeperGetBySlug — same shape as
+// publicList's `publicPrice` (generic pricing rules, no shopkeeper override).
+const publicGetBySlug = async (request, response, next) => {
+  try {
+    const product = await db.Product.findOne({
+      where: { slug: request.validated.params.slug, status: PRODUCT_STATUSES.ACTIVE },
+      include: productInclude,
+    });
+    if (!product) {
+      throw new AppError("Product not found", {
+        statusCode: 404,
+        code: "PRODUCT_NOT_FOUND",
+      });
+    }
+    const plain = product.toJSON();
+    plain.variants = await Promise.all(
+      product.variants.map(async (variant) => {
+        try {
+          const price = await pricingService.calculatePublicPrice({
+            variant,
+            quantity: variant.minimumOrderQuantity,
+          });
+          return { ...variant.toJSON(), publicPrice: price.unitPrice.toFixed(4) };
+        } catch {
+          return { ...variant.toJSON(), publicPrice: null };
+        }
+      }),
+    );
+    response.json(ApiResponse.success({ data: plain }));
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -684,5 +851,8 @@ export const productController = {
   adminDelete,
   adminAddImages,
   adminDeleteImage,
+  shopkeeperGetBySlug,
+  publicGetBySlug,
   shopkeeperList,
+  publicList,
 };

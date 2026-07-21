@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PRODUCT_STATUSES } from "../../constants/app.constants.js";
+import { PRODUCT_STATUSES, PRODUCT_TYPES } from "../../constants/app.constants.js";
 
 export const variantSchema = z.object({
   id: z.coerce.number().int().positive().optional(),
@@ -7,10 +7,13 @@ export const variantSchema = z.object({
   name: z.string().trim().max(191).nullable().optional(),
   purity: z.string().trim().max(50).nullable().optional(),
   karat: z.coerce.number().positive().nullable().optional(),
+  publicPurity: z.string().trim().max(50).nullable().optional(),
+  publicKarat: z.coerce.number().positive().nullable().optional(),
   tunch: z.coerce.number().min(0).max(100).nullable().optional(),
   weightGrams: z.coerce.number().nonnegative().nullable().optional(),
   minimumOrderQuantity: z.coerce.number().positive().default(1),
   attributes: z.record(z.string(), z.unknown()).nullable().optional(),
+  attributeValueIds: z.array(z.coerce.number().int().positive()).max(20).optional(),
   isActive: z.boolean().optional(),
   basePrice: z.coerce.number().nonnegative().optional(),
   openingStock: z.coerce.number().nonnegative().optional(),
@@ -51,12 +54,15 @@ const productBody = z.object({
     .trim()
     .min(2)
     .max(100)
-    .transform((value) => value.toUpperCase()),
+    .transform((value) => value.toUpperCase())
+    .nullable()
+    .optional(),
   name: z.string().trim().min(2).max(191),
   slug: z.string().trim().max(220).optional(),
   description: z.string().trim().max(10000).nullable().optional(),
   jewelryAttributes: z.record(z.string(), z.unknown()).nullable().optional(),
   status: z.enum(Object.values(PRODUCT_STATUSES)).default(PRODUCT_STATUSES.DRAFT),
+  productType: z.enum(Object.values(PRODUCT_TYPES)).default(PRODUCT_TYPES.SIMPLE),
   variants: z.array(variantSchema).min(1).max(50),
 });
 
@@ -98,6 +104,14 @@ export const imageIdSchema = z.object({
   params: z.object({
     id: z.coerce.number().int().positive(),
     imageId: z.coerce.number().int().positive(),
+  }),
+  query: z.object({}).passthrough(),
+});
+
+export const slugParamSchema = z.object({
+  body: z.unknown().optional(),
+  params: z.object({
+    slug: z.string().trim().min(1).max(255),
   }),
   query: z.object({}).passthrough(),
 });

@@ -7,6 +7,7 @@ import { rbacAdminRouter } from "../modules/rbac/rbac.routes.js";
 import { shopkeeperAdminRouter } from "../modules/shopkeepers/shopkeeper.routes.js";
 import { mediaAdminRouter } from "../modules/media/media.routes.js";
 import { metalAdminRouter } from "../modules/metals/metal.routes.js";
+import { metalRateAdminRouter } from "../modules/metal-rates/metal-rate.routes.js";
 import { categoryAdminRouter } from "../modules/categories/category.routes.js";
 import { productAdminRouter } from "../modules/products/product.routes.js";
 import { productVariantAdminRouter } from "../modules/product-variants/product-variant.routes.js";
@@ -24,6 +25,11 @@ import { khatabookAdminRouter } from "../modules/khatabook/khatabook.routes.js";
 import { analyticsAdminRouter } from "../modules/analytics/analytics.routes.js";
 import { featureFlagAdminRouter } from "../modules/feature-flags/feature-flag.routes.js";
 import { attributeAdminRouter } from "../modules/attributes/attribute.routes.js";
+import { homepageAdminRouter } from "../modules/homepage/homepage.routes.js";
+import { storeSettingsAdminRouter } from "../modules/settings/store-settings.routes.js";
+import { collectionAdminRouter } from "../modules/collections/collection.routes.js";
+import { bannerAdminRouter } from "../modules/banners/banner.routes.js";
+import { bannerPlaceholderAdminRouter } from "../modules/banners/banner-placeholder.routes.js";
 
 const router = Router();
 
@@ -35,6 +41,7 @@ router.use("/rbac", rbacAdminRouter);
 router.use("/shopkeepers", shopkeeperAdminRouter);
 router.use("/media", mediaAdminRouter);
 router.use("/metals", metalAdminRouter);
+router.use("/metal-rates", metalRateAdminRouter);
 router.use("/categories", categoryAdminRouter);
 router.use("/products", productAdminRouter);
 router.use("/product-variants", productVariantAdminRouter);
@@ -52,5 +59,10 @@ router.use("/khatabook", khatabookAdminRouter);
 router.use("/analytics", analyticsAdminRouter);
 router.use("/feature-flags", featureFlagAdminRouter);
 router.use("/attributes", attributeAdminRouter);
+router.use("/homepages", homepageAdminRouter);
+router.use("/store-settings", storeSettingsAdminRouter);
+router.use("/collections", collectionAdminRouter);
+router.use("/banners", bannerAdminRouter);
+router.use("/banner-placeholders", bannerPlaceholderAdminRouter);
 
 export default router;

@@ -83,6 +83,21 @@ export const ledgerQuerySchema = z.object({
     .passthrough(),
 });
 
+// Same shape as ledgerQuerySchema, minus shopkeeperId — the authenticated
+// shopkeeper's own id is used instead, so a shop can only ever read its own
+// ledger, never one supplied via the query string.
+export const currentShopkeeperLedgerSchema = z.object({
+  body: z.unknown().optional(),
+  params: z.object({}).passthrough(),
+  query: z
+    .object({
+      metalId: id.optional(),
+      page: z.coerce.number().int().positive().default(1),
+      pageSize: z.coerce.number().int().positive().max(100).default(50),
+    })
+    .passthrough(),
+});
+
 export const createOrderSchema = z.object({
   body: z.object({
     shopkeeperId: id,
@@ -93,6 +108,7 @@ export const createOrderSchema = z.object({
     items: z.array(itemSchema).min(1),
     collection: optionalCollectionSchema.optional(),
     overrideCreditLimit: z.coerce.boolean().default(false),
+    sourceOrderIds: z.array(id).max(50).optional().default([]),
   }),
   params: z.object({}).passthrough(),
   query: z.object({}).passthrough(),

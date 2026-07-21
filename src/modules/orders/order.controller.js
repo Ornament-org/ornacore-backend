@@ -8,6 +8,18 @@ import { accountsLedgerService } from "../accounts-ledger/accounts-ledger.servic
 import { auditLogService } from "../audit-logs/audit-log.service.js";
 import { pricingService } from "../pricing/pricing.service.js";
 
+// B2B ordering runs on weight, not price — a wholesale rate isn't always
+// configured for every SKU (it moves with the daily metal rate), and that
+// shouldn't block a shop's order from going through. Falls back to an
+// unpriced line instead of failing the whole order.
+const priceOrUnpriced = async (params) => {
+  try {
+    return await pricingService.calculateVariantPrice(params);
+  } catch {
+    return { unitPrice: new Decimal(0), snapshot: { configured: false } };
+  }
+};
+
 export const orderInclude = [
   {
     model: db.ShopkeeperProfile,
@@ -24,7 +36,19 @@ export const orderInclude = [
     model: db.OrderItem,
     as: "items",
     include: [
-      { model: db.Product, as: "product" },
+      {
+        model: db.Product,
+        as: "product",
+        include: [
+          { model: db.Metal, as: "metal" },
+          {
+            model: db.ProductImage,
+            as: "images",
+            required: false,
+            include: [{ model: db.Media, as: "media", required: false }],
+          },
+        ],
+      },
       { model: db.ProductVariant, as: "variant" },
     ],
   },
@@ -161,12 +185,13 @@ const postSaleJournal = async (order, request, transaction) => {
 
 const adminList = async (request, response) => {
   try {
-    const { page, pageSize, search, status, paymentStatus, assignedStaffId } =
+    const { page, pageSize, search, status, paymentStatus, assignedStaffId, shopkeeperId } =
       request.validated.query;
     const where = {};
     if (status) where.status = status;
     if (paymentStatus) where.paymentStatus = paymentStatus;
     if (assignedStaffId) where.assignedStaffId = assignedStaffId;
+    if (shopkeeperId) where.shopkeeperId = shopkeeperId;
     if (search) where.orderNumber = { [Op.like]: `%${search}%` };
     const { rows, count } = await db.Order.findAndCountAll({
       where,
@@ -255,7 +280,7 @@ const adminCreate = async (request, response) => {
             code: "MOQ_NOT_MET",
           });
         }
-        const price = await pricingService.calculateVariantPrice({
+        const price = await priceOrUnpriced({
           shopkeeper,
           variant,
           quantity: inputItem.quantity,
@@ -595,7 +620,7 @@ const shopkeeperCreate = async (request, response) => {
             code: "INSUFFICIENT_STOCK",
           });
         }
-        const price = await pricingService.calculateVariantPrice({
+        const price = await priceOrUnpriced({
           shopkeeper: request.shopkeeper,
           variant,
           quantity: cartItem.quantity,

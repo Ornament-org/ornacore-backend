@@ -180,12 +180,13 @@ export const attributeService = {
     await val.destroy();
   },
 
-  async syncVariantAttributes(variantId, attributeValueIds = []) {
-    await db.ProductVariantAttribute.destroy({ where: { variantId } });
+  async syncVariantAttributes(variantId, attributeValueIds = [], { transaction } = {}) {
+    await db.ProductVariantAttribute.destroy({ where: { variantId }, transaction });
     if (attributeValueIds.length === 0) return;
 
     const values = await db.AttributeValue.findAll({
       where: { id: attributeValueIds },
+      transaction,
     });
     if (values.length !== attributeValueIds.length) {
       const found = new Set(values.map((v) => String(v.id)));
@@ -199,7 +200,7 @@ export const attributeService = {
 
     await db.ProductVariantAttribute.bulkCreate(
       attributeValueIds.map((attributeValueId) => ({ variantId, attributeValueId })),
-      { ignoreDuplicates: true },
+      { ignoreDuplicates: true, transaction },
     );
   },
 

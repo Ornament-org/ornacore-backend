@@ -15,6 +15,8 @@ const ShopkeeperAddress = sequelize.define(
     city: { type: DataTypes.STRING(120), allowNull: false },
     state: { type: DataTypes.STRING(120), allowNull: false },
     pincode: { type: DataTypes.STRING(12), allowNull: false },
+    latitude: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
+    longitude: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
     country: { type: DataTypes.STRING(80), allowNull: false, defaultValue: "India" },
     isPrimary: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },

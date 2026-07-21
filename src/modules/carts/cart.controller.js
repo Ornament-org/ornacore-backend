@@ -13,13 +13,39 @@ export const cartInclude = [
         model: db.ProductVariant,
         as: "variant",
         include: [
-          { model: db.Product, as: "product" },
+          {
+            model: db.Product,
+            as: "product",
+            include: [
+              { model: db.Metal, as: "metal" },
+              {
+                model: db.ProductImage,
+                as: "images",
+                required: false,
+                include: [{ model: db.Media, as: "media", required: false }],
+              },
+            ],
+          },
           { model: db.Inventory, as: "inventory", required: false },
         ],
       },
     ],
   },
 ];
+
+// B2B ordering here runs on weight, not price — a wholesale rate isn't
+// always configured for every SKU (it moves with the daily metal rate), and
+// that shouldn't block a shop from adding a piece to their cart. Falls back
+// to an unpriced line instead of failing the request; the cart/order total
+// that actually matters to a shopkeeper is the weight-by-metal breakdown
+// below, not this price.
+const priceOrUnpriced = async (params) => {
+  try {
+    return await pricingService.calculateVariantPrice(params);
+  } catch {
+    return { unitPrice: new Decimal(0), snapshot: { configured: false } };
+  }
+};
 
 const getActiveCart = async (shopkeeperId, transaction) => {
   const [cart] = await db.Cart.findOrCreate({
@@ -35,7 +61,19 @@ const cartDto = (cart) => {
     (sum, item) => sum.plus(new Decimal(item.unitPriceSnapshot).mul(item.quantity)),
     new Decimal(0),
   );
-  return { ...cart.toJSON(), total: total.toFixed(4) };
+  const weightByMetal = new Map();
+  cart.items.forEach((item) => {
+    const metalName = item.variant?.product?.metal?.name ?? "Other";
+    const lineWeight = new Decimal(item.variant?.weightGrams ?? 0).mul(item.quantity);
+    weightByMetal.set(metalName, (weightByMetal.get(metalName) ?? new Decimal(0)).plus(lineWeight));
+  });
+  return {
+    ...cart.toJSON(),
+    total: total.toFixed(4),
+    weightByMetal: Object.fromEntries(
+      Array.from(weightByMetal.entries()).map(([metalName, weight]) => [metalName, weight.toFixed(3)]),
+    ),
+  };
 };
 
 const getCart = async (request, response) => {
@@ -87,7 +125,7 @@ const addItem = async (request, response) => {
           code: "INSUFFICIENT_STOCK",
         });
       }
-      const price = await pricingService.calculateVariantPrice({
+      const price = await priceOrUnpriced({
         shopkeeper: request.shopkeeper,
         variant,
         quantity: input.quantity,
@@ -172,7 +210,7 @@ const updateItem = async (request, response) => {
           code: "INSUFFICIENT_STOCK",
         });
       }
-      const price = await pricingService.calculateVariantPrice({
+      const price = await priceOrUnpriced({
         shopkeeper: request.shopkeeper,
         variant: item.variant,
         quantity,

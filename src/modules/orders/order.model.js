@@ -16,6 +16,7 @@ const Order = sequelize.define(
     shopkeeperId: foreignBigInt(),
     placedByUserId: foreignBigInt(),
     assignedStaffId: foreignBigInt({ allowNull: true }),
+    fulfilledByKhatabookOrderId: foreignBigInt({ allowNull: true }),
     status: {
       type: DataTypes.ENUM(...Object.values(ORDER_STATUSES)),
       allowNull: false,

@@ -6,6 +6,8 @@ export const productVariantBodySchema = z.object({
   name: z.string().trim().max(191).nullable().optional(),
   purity: z.string().trim().max(50).nullable().optional(),
   karat: z.coerce.number().positive().nullable().optional(),
+  publicPurity: z.string().trim().max(50).nullable().optional(),
+  publicKarat: z.coerce.number().positive().nullable().optional(),
   tunch: z.coerce.number().min(0).max(100).nullable().optional(),
   weightGrams: z.coerce.number().nonnegative().nullable().optional(),
   minimumOrderQuantity: z.coerce.number().positive().optional(),

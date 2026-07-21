@@ -2,6 +2,7 @@ import { mediaStorageService } from "../../integrations/media/media-storage.serv
 import { AppError } from "../../shared/errors/AppError.js";
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
 import db from "../../database/models/InitializeModels.js";
+import { mediaService } from "./media.service.js";
 
 const parseOwner = (value) => {
   if (!value) return {};
@@ -22,27 +23,39 @@ const parseOwner = (value) => {
   }
 };
 
+const handleError = (response, error) => {
+  response.status(error.statusCode || 500).json(
+    ApiResponse.error({
+      code: error.code || "INTERNAL_ERROR",
+      message: error.message || "An unexpected error occurred",
+    }),
+  );
+};
+
+// Backs the Media Library grid — search/type/folder filters plus a library-vs-trash toggle.
 const list = async (request, response) => {
   try {
-    const rows = await db.Media.findAll({
-      order: [["createdAt", "DESC"]],
-      limit: Math.min(Number(request.query.limit) || 50, 100),
-    });
-    response.json(ApiResponse.success({ data: rows }));
+    const { page, limit, search, folderId, mimeType, trashed } = request.query;
+    const { files, pagination } = await mediaService.list({ page, limit, search, folderId, mimeType, trashed });
+    response.json(ApiResponse.success({ data: { files }, meta: { pagination } }));
   } catch (error) {
-    response.status(error.statusCode || 500).json(
-      ApiResponse.error({
-        code: error.code || "INTERNAL_ERROR",
-        message: error.message || "An unexpected error occurred",
-      }),
-    );
+    handleError(response, error);
+  }
+};
+
+const get = async (request, response) => {
+  try {
+    const media = await mediaService.getById(request.params.id);
+    response.json(ApiResponse.success({ data: media }));
+  } catch (error) {
+    handleError(response, error);
   }
 };
 
 /*
   POST /admin/media  (multipart/form-data)
   files: <binary file(s)>
-  owner: '{"ownerType":"Product","ownerId":5,"folder":"products"}'  (optional JSON string)
+  owner: '{"ownerType":"Product","ownerId":5,"folder":"products","folderId":3,"altText":"..."}'  (optional JSON string)
 */
 const upload = async (request, response) => {
   try {
@@ -68,6 +81,8 @@ const upload = async (request, response) => {
         secureUrl: result.secureUrl,
         resourceType: result.resourceType,
         folder: result.folder,
+        folderId: owner.folderId || null,
+        altText: owner.altText || null,
         originalFilename: file.originalname,
         mimeType: file.mimetype,
         sizeBytes: file.size,
@@ -94,16 +109,102 @@ const upload = async (request, response) => {
       }),
     );
   } catch (error) {
-    response.status(error.statusCode || 500).json(
-      ApiResponse.error({
-        code: error.code || "INTERNAL_ERROR",
-        message: error.message || "An unexpected error occurred",
-      }),
-    );
+    handleError(response, error);
+  }
+};
+
+const update = async (request, response) => {
+  try {
+    const media = await mediaService.update(request.params.id, {
+      altText: request.body.altText,
+      folderId: request.body.folderId,
+    });
+    response.json(ApiResponse.success({ message: "Media updated successfully", data: media }));
+  } catch (error) {
+    handleError(response, error);
+  }
+};
+
+const trash = async (request, response) => {
+  try {
+    const media = await mediaService.trash(request.params.id);
+    response.json(ApiResponse.success({ message: "Media moved to trash", data: media }));
+  } catch (error) {
+    handleError(response, error);
+  }
+};
+
+const restore = async (request, response) => {
+  try {
+    const media = await mediaService.restore(request.params.id);
+    response.json(ApiResponse.success({ message: "Media restored", data: media }));
+  } catch (error) {
+    handleError(response, error);
+  }
+};
+
+const purge = async (request, response) => {
+  try {
+    await mediaService.purge(request.params.id);
+    response.json(ApiResponse.success({ message: "Media permanently deleted" }));
+  } catch (error) {
+    handleError(response, error);
+  }
+};
+
+const listFolders = async (request, response) => {
+  try {
+    const folders = await mediaService.listFolders();
+    response.json(ApiResponse.success({ data: { folders } }));
+  } catch (error) {
+    handleError(response, error);
+  }
+};
+
+const createFolder = async (request, response) => {
+  try {
+    const folder = await mediaService.createFolder({
+      name: request.body.name,
+      parentId: request.body.parentId,
+      userId: request.auth?.sub,
+    });
+    response.status(201).json(ApiResponse.success({ message: "Folder created successfully", data: folder }));
+  } catch (error) {
+    handleError(response, error);
+  }
+};
+
+const updateFolder = async (request, response) => {
+  try {
+    const folder = await mediaService.updateFolder(request.params.id, {
+      name: request.body.name,
+      parentId: request.body.parentId,
+    });
+    response.json(ApiResponse.success({ message: "Folder updated successfully", data: folder }));
+  } catch (error) {
+    handleError(response, error);
+  }
+};
+
+const deleteFolder = async (request, response) => {
+  try {
+    await mediaService.deleteFolder(request.params.id);
+    response.json(ApiResponse.success({ message: "Folder deleted successfully" }));
+  } catch (error) {
+    handleError(response, error);
   }
 };
 
 export const mediaController = {
   list,
+  get,
   upload,
+  update,
+  trash,
+  restore,
+  purge,
+  listFolders,
+  createFolder,
+  updateFolder,
+  deleteFolder,
 };

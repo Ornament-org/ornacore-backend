@@ -15,6 +15,8 @@ export const categoryBodySchema = z.object({
   metaDescription: z.string().trim().max(5000).nullable().optional(),
   ogMediaId: nullableId,
   sortOrder: z.coerce.number().int().nonnegative().optional(),
+  featuredOnHome: z.boolean().optional(),
+  homeSortOrder: z.coerce.number().int().nonnegative().optional(),
 });
 
 export const createCategorySchema = z.object({

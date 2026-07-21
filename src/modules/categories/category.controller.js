@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import { CATEGORY_STATUSES } from "../../constants/app.constants.js";
 import db from "../../database/models/InitializeModels.js";
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
@@ -9,10 +10,33 @@ const shopkeeperCategoryInclude = [
   { model: db.Metal, as: "metal", required: false },
 ];
 
-const getShopkeeperCategoryWhere = (query) => ({
-  status: CATEGORY_STATUSES.ACTIVE,
-  ...(query.metalId ? { metalId: query.metalId } : {}),
-});
+const parseIds = (value) =>
+  String(value ?? "")
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((id) => Number.isInteger(id) && id > 0);
+
+// The homepage "Shop by Category" strip is admin-curated in one of two ways:
+//   - `ids` (from Homepage Management's category picker): an explicit set,
+//     still narrowed to the current metal (plus metal-agnostic categories).
+//   - `featured=true` (legacy, per-category "Feature on homepage" toggle):
+//     falls back to this when no explicit picker selection exists.
+// Either way, a metal filter always includes metal-agnostic ("All Metals")
+// categories alongside ones pinned to that metal.
+const getShopkeeperCategoryWhere = (query) => {
+  const ids = query.ids ? parseIds(query.ids) : [];
+  const curated = query.featured === "true" || ids.length > 0;
+  return {
+    status: CATEGORY_STATUSES.ACTIVE,
+    ...(ids.length ? { id: ids } : {}),
+    ...(query.featured === "true" ? { featuredOnHome: true } : {}),
+    ...(query.metalId
+      ? curated
+        ? { [Op.or]: [{ metalId: query.metalId }, { metalId: null }] }
+        : { metalId: query.metalId }
+      : {}),
+  };
+};
 
 const list = async (request, response) => {
   try {
@@ -176,15 +200,24 @@ const shopkeeperTree = async (request, response) => {
 
 const shopkeeperList = async (request, response) => {
   try {
+    const featured = request.query.featured === "true";
+    const ids = request.query.ids ? parseIds(request.query.ids) : [];
     const rows = await db.Category.findAll({
       where: getShopkeeperCategoryWhere(request.query),
       include: shopkeeperCategoryInclude,
-      order: [["sortOrder", "ASC"], ["name", "ASC"]],
+      order: featured
+        ? [["homeSortOrder", "ASC"], ["name", "ASC"]]
+        : [["sortOrder", "ASC"], ["name", "ASC"]],
     });
+    const data = ids.length
+      ? ids
+          .map((id) => rows.find((row) => String(row.id) === String(id)))
+          .filter(Boolean)
+      : rows;
     return response.json(
       ApiResponse.success({
         message: "Categories fetched successfully",
-        data: rows,
+        data,
       }),
     );
   } catch (error) {

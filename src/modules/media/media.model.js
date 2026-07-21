@@ -19,10 +19,17 @@ const Media = sequelize.define(
     ownerType: { type: DataTypes.STRING(100), allowNull: true },
     ownerId: foreignBigInt({ allowNull: true }),
     metadata: { type: DataTypes.JSON, allowNull: true },
+    folderId: foreignBigInt({ allowNull: true }),
+    altText: { type: DataTypes.STRING(300), allowNull: true },
   },
   {
     ...modelOptions("media", {
-      indexes: [{ fields: ["owner_type", "owner_id"] }],
+      // Trash/restore in the Media Library is a soft delete — Sequelize's paranoid mode
+      // sets/clears deleted_at and excludes trashed rows from normal queries by default,
+      // while findByPk(..., { paranoid: false }) still reaches them for restore/purge.
+      // This never breaks the mediaId FKs that Category/ProductImage hold onto.
+      paranoid: true,
+      indexes: [{ fields: ["owner_type", "owner_id"] }, { fields: ["folder_id"] }],
     }),
   },
 );

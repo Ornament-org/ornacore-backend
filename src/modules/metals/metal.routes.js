@@ -11,6 +11,8 @@ export const metalAdminRouter = createModuleRouter();
 
 export const metalShopkeeperRouter = createModuleRouter();
 
+export const metalPublicRouter = createModuleRouter();
+
 metalAdminRouter.use(...protectAdmin(PERMISSIONS.CATALOG_MANAGE));
 
 metalAdminRouter.get("/", validate(listQuerySchema), asyncHandler(metalController.list));
@@ -23,3 +25,7 @@ metalShopkeeperRouter.get(
   "/",
   asyncHandler(metalController.listActive),
 );
+
+// Fully unauthenticated — the storefront needs active metals (id/code/name) to map its
+// gold/silver/diamond/platinum tabs to real metal IDs before any shopkeeper login exists.
+metalPublicRouter.get("/", asyncHandler(metalController.listActive));
