@@ -65,6 +65,10 @@ export default function commerceAssociations(db) {
   });
   db.Order.belongsTo(db.User, { foreignKey: "placedByUserId", as: "placedBy" });
   db.Order.belongsTo(db.StaffProfile, { foreignKey: "assignedStaffId", as: "assignedStaff" });
+  db.Order.belongsTo(db.KhatabookOrder, {
+    foreignKey: "fulfilledByKhatabookOrderId",
+    as: "fulfillmentOrder",
+  });
   db.Order.hasMany(db.OrderItem, { foreignKey: "orderId", as: "items" });
   db.OrderItem.belongsTo(db.Order, { foreignKey: "orderId", as: "order" });
   db.OrderItem.belongsTo(db.Product, { foreignKey: "productId", as: "product" });
@@ -103,6 +107,10 @@ export default function commerceAssociations(db) {
   db.KhatabookOrderItem.belongsTo(db.KhatabookOrder, {
     foreignKey: "khatabookOrderId",
     as: "order",
+  });
+  db.KhatabookOrder.hasMany(db.Order, {
+    foreignKey: "fulfilledByKhatabookOrderId",
+    as: "sourceOrders",
   });
 
   db.KhatabookOrder.hasMany(db.KhatabookCollection, {

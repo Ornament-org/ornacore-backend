@@ -60,6 +60,7 @@ const mapDraft = (draft) => ({
     fineWeight: gm(item.fineWeight),
   })),
   fineDelivered: gm(draft.fineDelivered),
+  cashDueFine: gm(draft.cashDueFine),
   collectionCredit: gm(draft.collectionCredit),
   cashConvertedFine: gm(draft.cashConvertedFine),
   orderDue: gm(draft.orderDue),
@@ -125,10 +126,22 @@ export const khatabookSettlementEngine = {
       metalId: payload.metalId,
       transaction,
     });
+    const cashDueFine = this.convertCashToMetalService({
+      cashAmount: payload.cashDueAmount,
+      metalRate: payload.cashDueRate,
+    });
     const items = payload.items.map((item) => ({
       ...item,
       fineWeight: this.calculateItemFineWeight(item),
     }));
+    if (cashDueFine.gt(0)) {
+      items.push({
+        itemName: `Cash due ${money(payload.cashDueAmount)} @ ${money(payload.cashDueRate)}/10gm`,
+        grossWeight: cashDueFine,
+        tunch: d(100),
+        fineWeight: cashDueFine,
+      });
+    }
     const fineDelivered = items.reduce((total, item) => total.plus(item.fineWeight), d(0));
     const metalCredit = d(payload.collection?.metalReceived ?? 0);
     const cashConvertedFine = this.convertCashToMetalService({
@@ -150,6 +163,7 @@ export const khatabookSettlementEngine = {
       items,
       fineDelivered,
       metalCredit,
+      cashDueFine,
       cashConvertedFine,
       collectionCredit,
       orderDue,

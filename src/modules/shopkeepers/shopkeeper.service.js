@@ -201,6 +201,7 @@ export const shopkeeperDetailsService = {
       creditLimits: creditLimits.map(toCreditLimit),
       shop: {
         shopName: profile.shopName,
+        profileImageUrl: profile.profileImageUrl,
         businessType: profile.businessType,
         gstNumber: profile.gstNumber,
         panNumber: null,

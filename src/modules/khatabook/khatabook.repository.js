@@ -14,6 +14,12 @@ const orderInclude = [
     as: "settlements",
     include: [{ model: db.KhatabookCollection, as: "collection" }],
   },
+  {
+    model: db.Order,
+    as: "sourceOrders",
+    required: false,
+    attributes: ["id", "orderNumber", "status", "createdAt"],
+  },
 ];
 
 export const khatabookRepository = {
@@ -160,7 +166,18 @@ export const khatabookRepository = {
       where,
       include: [
         { model: db.Metal, as: "metal" },
-        { model: db.KhatabookOrder, as: "order" },
+        {
+          model: db.KhatabookOrder,
+          as: "order",
+          include: [
+            {
+              model: db.Order,
+              as: "sourceOrders",
+              required: false,
+              attributes: ["id", "orderNumber", "status", "createdAt"],
+            },
+          ],
+        },
         { model: db.KhatabookCollection, as: "collection" },
       ],
       order: [

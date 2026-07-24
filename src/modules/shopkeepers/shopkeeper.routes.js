@@ -6,6 +6,7 @@ import { validate } from "../../middlewares/validate.js";
 import { protectAdmin } from "../../shared/http/adminRoute.js";
 import { asyncHandler } from "../../shared/http/asyncHandler.js";
 import { idParamSchema, listQuerySchema } from "../../shared/http/crud.validation.js";
+import { mediaUpload } from "../media/media.upload.middleware.js";
 import { createModuleRouter } from "../module.router.js";
 import { shopkeeperController, shopkeeperDetailsController } from "./shopkeeper.controller.js";
 import {
@@ -122,6 +123,12 @@ shopkeeperProfileRouter.patch(
   "/",
   validate(updateMyProfileSchema),
   asyncHandler(shopkeeperController.updateMyProfile),
+);
+
+shopkeeperProfileRouter.post(
+  "/photo",
+  mediaUpload.single("photo"),
+  asyncHandler(shopkeeperController.uploadMyProfilePhoto),
 );
 
 shopkeeperProfileRouter.put(

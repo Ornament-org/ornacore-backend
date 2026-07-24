@@ -2,8 +2,23 @@ import { QueryTypes } from "sequelize";
 import db from "../../database/models/InitializeModels.js";
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
 
-const dashboard = async (_request, response) => {
+const validDate = (value) => {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+};
+
+const dashboard = async (request, response) => {
   try {
+    const start = validDate(request.query?.startDate);
+    const end = validDate(request.query?.endDate);
+    const startDate = start ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const endDate = end ?? new Date();
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+    const replacements = { startDate, endDate };
+    const khatabookDateWhere = "ko.entry_date BETWEEN :startDate AND :endDate";
+    const orderDateWhere = "o.created_at BETWEEN :startDate AND :endDate";
+
     const [
       totalShopkeepers,
       pendingApproval,
@@ -12,15 +27,16 @@ const dashboard = async (_request, response) => {
       orderStatus,
       recentOrders,
       salesTrend,
+      salesByMetal,
       topCategories,
       lowStock,
       dueRows,
     ] = await Promise.all([
       db.ShopkeeperProfile.count(),
       db.ShopkeeperProfile.count({ where: { status: "PENDING_REVIEW" } }),
-      db.Order.count(),
-      db.Order.sum("grandTotal", {
-        where: { status: ["CONFIRMED", "PACKED", "DISPATCHED", "DELIVERED"] },
+      db.KhatabookOrder.count({ where: { entryDate: { [db.Sequelize.Op.between]: [startDate, endDate] } } }),
+      db.KhatabookOrder.sum("fineDelivered", {
+        where: { entryDate: { [db.Sequelize.Op.between]: [startDate, endDate] } },
       }),
       db.Order.findAll({
         attributes: ["status", [db.sequelize.fn("COUNT", db.sequelize.col("id")), "value"]],
@@ -33,28 +49,45 @@ const dashboard = async (_request, response) => {
         limit: 5,
       }),
       db.sequelize.query(
-        `SELECT DATE(created_at) AS date, SUM(grand_total) AS sales
-         FROM orders
-         WHERE status IN ('CONFIRMED', 'PACKED', 'DISPATCHED', 'DELIVERED')
-           AND created_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
-         GROUP BY DATE(created_at)
+        `SELECT DATE(ko.entry_date) AS date, SUM(ko.fine_delivered) AS sales
+         FROM khatabook_orders ko
+         WHERE ${khatabookDateWhere}
+         GROUP BY DATE(ko.entry_date)
          ORDER BY date ASC`,
-        { type: QueryTypes.SELECT },
+        { replacements, type: QueryTypes.SELECT },
       ),
       db.sequelize.query(
-        `SELECT c.name, SUM(oi.line_total) AS amount,
-           SUM(oi.quantity) AS quantity
+        `SELECT
+           m.id AS metal_id,
+           m.name,
+           COALESCE(SUM(ko.fine_delivered), 0) AS value
+         FROM metals m
+         LEFT JOIN khatabook_orders ko
+           ON ko.metal_id = m.id
+          AND ko.entry_date BETWEEN :startDate AND :endDate
+         WHERE m.is_active = true
+         GROUP BY m.id, m.name
+         ORDER BY value DESC`,
+        { replacements, type: QueryTypes.SELECT },
+      ),
+      db.sequelize.query(
+        `SELECT c.name,
+           SUM(COALESCE(pv.weight_grams, 0) * oi.quantity) AS fine_weight,
+           SUM(oi.quantity) AS quantity,
+           COUNT(DISTINCT o.id) AS orders
          FROM order_items oi
          INNER JOIN orders o ON o.id = oi.order_id
+         INNER JOIN product_variants pv ON pv.id = oi.product_variant_id
          INNER JOIN products p ON p.id = oi.product_id
          INNER JOIN product_category_mappings pcm
            ON pcm.product_id = p.id AND pcm.is_primary = true
          INNER JOIN categories c ON c.id = pcm.category_id
-         WHERE o.status IN ('CONFIRMED', 'PACKED', 'DISPATCHED', 'DELIVERED')
+         WHERE o.status != 'CANCELLED'
+           AND ${orderDateWhere}
          GROUP BY c.id, c.name
-         ORDER BY amount DESC
+         ORDER BY fine_weight DESC
          LIMIT 5`,
-        { type: QueryTypes.SELECT },
+        { replacements, type: QueryTypes.SELECT },
       ),
       db.Inventory.findAll({
         where: db.sequelize.where(
@@ -66,7 +99,13 @@ const dashboard = async (_request, response) => {
           {
             model: db.ProductVariant,
             as: "variant",
-            include: [{ model: db.Product, as: "product" }],
+            include: [
+              {
+                model: db.Product,
+                as: "product",
+                include: [{ model: db.Metal, as: "metal" }],
+              },
+            ],
           },
         ],
         order: [["onHandQuantity", "ASC"]],
@@ -74,19 +113,20 @@ const dashboard = async (_request, response) => {
       }),
       db.sequelize.query(
         `SELECT
-           SUM(CASE WHEN jl.side = 'DEBIT' THEN jl.amount ELSE -jl.amount END) AS total_due
-         FROM journal_lines jl
-         INNER JOIN journal_entries je ON je.id = jl.journal_entry_id
-         INNER JOIN ledger_accounts la ON la.id = jl.ledger_account_id
-         WHERE je.status = 'POSTED'
-           AND la.owner_type = 'SHOPKEEPER'
-           AND la.account_type = 'ASSET'`,
+           m.id AS metal_id,
+           m.name,
+           COALESCE(SUM(ko.outstanding_due), 0) AS value
+         FROM metals m
+         LEFT JOIN khatabook_orders ko ON ko.metal_id = m.id
+         WHERE m.is_active = true
+         GROUP BY m.id, m.name
+         ORDER BY value DESC`,
         { type: QueryTypes.SELECT },
       ),
     ]);
 
     const statusMap = Object.fromEntries(orderStatus.map((row) => [row.status, Number(row.value)]));
-    const totalDue = Number(dueRows[0]?.total_due || 0);
+    const totalDue = dueRows.reduce((sum, row) => sum + Number(row.value || 0), 0);
     response.json(
       ApiResponse.success({
         data: {
@@ -106,18 +146,21 @@ const dashboard = async (_request, response) => {
             date: row.date,
             sales: Number(row.sales),
           })),
+          salesByMetal: salesByMetal.map((row) => ({
+            name: row.name,
+            value: Number(row.value || 0),
+          })),
           topCategories: topCategories.map((row) => ({
             name: row.name,
-            amount: Number(row.amount),
+            amount: Number(row.fine_weight),
             quantity: Number(row.quantity),
+            orders: Number(row.orders),
           })),
           lowStock,
-          dueAging: [
-            { name: "0–30 Days", value: totalDue },
-            { name: "31–60 Days", value: 0 },
-            { name: "61–90 Days", value: 0 },
-            { name: "90+ Days", value: 0 },
-          ],
+          dueAging: dueRows.map((row) => ({
+            name: row.name,
+            value: Number(row.value || 0),
+          })),
         },
       }),
     );

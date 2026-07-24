@@ -19,6 +19,7 @@ const ShopkeeperProfile = sequelize.define(
     longitude: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
     gstNumber: { type: DataTypes.STRING(32), allowNull: true, unique: true },
     businessType: { type: DataTypes.STRING(100), allowNull: true },
+    profileImageUrl: { type: DataTypes.TEXT, allowNull: true },
     onboardingStep: { type: DataTypes.STRING(100), allowNull: false, defaultValue: "ACCOUNT" },
     status: {
       type: DataTypes.ENUM(...Object.values(SHOPKEEPER_STATUSES)),

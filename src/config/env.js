@@ -48,6 +48,7 @@ const envSchema = z.object({
   OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   SUPER_ADMIN_EMAIL: optionalString,
   SUPER_ADMIN_PASSWORD: optionalString,
+  GOOGLE_CLIENT_ID: optionalString,
 
   CORS_ORIGINS: z
     .string()

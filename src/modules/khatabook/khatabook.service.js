@@ -42,6 +42,19 @@ const mapCollection = (collection) => ({
   })),
 });
 
+const mapSourceOrder = (order) => ({
+  id: Number(order.id),
+  orderNumber: order.orderNumber,
+  status: order.status,
+  createdAt: order.createdAt,
+});
+
+const displayOrderNumber = (order) => {
+  const sourceOrders = order.sourceOrders ?? [];
+  if (sourceOrders.length === 1) return sourceOrders[0].orderNumber;
+  return order.orderNumber;
+};
+
 const settlementCollectionType = (settlement, order) =>
   String(settlement.collection?.sourceOrderId ?? "") === String(order.id)
     ? "ORDER_CREATION"
@@ -121,7 +134,9 @@ const mapOrder = (order, metalAccount = null) => {
 
   return {
     id: Number(order.id),
-    orderNumber: order.orderNumber,
+    orderNumber: displayOrderNumber(order),
+    khatabookOrderNumber: order.orderNumber,
+    sourceOrders: (order.sourceOrders ?? []).map(mapSourceOrder),
     shopkeeperId: Number(order.shopkeeperId),
     metalId: Number(order.metalId),
     metal: order.metal ? mapMetal(order.metal) : null,
@@ -176,7 +191,9 @@ const mapLedgerEntry = (entry) => ({
   metalId: Number(entry.metalId),
   metal: entry.metal ? mapMetal(entry.metal) : null,
   orderId: entry.khatabookOrderId ? Number(entry.khatabookOrderId) : null,
-  orderNumber: entry.order?.orderNumber ?? null,
+  orderNumber: entry.order ? displayOrderNumber(entry.order) : null,
+  khatabookOrderNumber: entry.order?.orderNumber ?? null,
+  sourceOrders: (entry.order?.sourceOrders ?? []).map(mapSourceOrder),
   collectionId: entry.collectionId ? Number(entry.collectionId) : null,
   collectionType: entry.collection?.collectionType ?? null,
   receivedQuantity: entry.collection?.receivedQuantity == null ? null : q(entry.collection.receivedQuantity),
@@ -234,23 +251,62 @@ const getMetalAccountSummary = async (shopkeeperId, metalId, options = {}) => {
   };
 };
 
+const loadSourceOrdersForFulfillment = async ({ payload, transaction }) => {
+  const sourceOrderIds = [...new Set(payload.sourceOrderIds ?? [])];
+  if (!sourceOrderIds.length) return [];
+  if (sourceOrderIds.length > 1) {
+    throw new AppError("Pull one shop order into a toolbox delivery at a time", {
+      statusCode: 422,
+      code: "MULTIPLE_SOURCE_ORDERS_NOT_ALLOWED",
+    });
+  }
+
+  const sourceOrders = await db.Order.findAll({
+    where: {
+      id: sourceOrderIds,
+      shopkeeperId: payload.shopkeeperId,
+    },
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
+  const byId = new Map(sourceOrders.map((order) => [String(order.id), order]));
+  const orderedSourceOrders = sourceOrderIds.map((orderId) => byId.get(String(orderId))).filter(Boolean);
+
+  if (orderedSourceOrders.length !== sourceOrderIds.length) {
+    throw new AppError("One or more source orders were not found for this shopkeeper", {
+      statusCode: 404,
+      code: "SOURCE_ORDER_NOT_FOUND",
+    });
+  }
+
+  const alreadyClosed = orderedSourceOrders.find((order) =>
+    [ORDER_STATUSES.DELIVERED, ORDER_STATUSES.CANCELLED].includes(order.status),
+  );
+  if (alreadyClosed) {
+    throw new AppError(`Order ${alreadyClosed.orderNumber} is already ${alreadyClosed.status.toLowerCase()}`, {
+      statusCode: 409,
+      code: "SOURCE_ORDER_ALREADY_CLOSED",
+    });
+  }
+
+  const alreadyFulfilled = orderedSourceOrders.find((order) => order.fulfilledByKhatabookOrderId);
+  if (alreadyFulfilled) {
+    throw new AppError(`Order ${alreadyFulfilled.orderNumber} has already been pulled into toolbox`, {
+      statusCode: 409,
+      code: "SOURCE_ORDER_ALREADY_FULFILLED",
+    });
+  }
+
+  return orderedSourceOrders;
+};
+
 // A shopkeeper's web-placed order can be handed over physically as part of a
 // khatabook delivery. Linking it here marks it DELIVERED so it stops showing
 // as pending, without re-running catalog inventory/accounts-ledger side effects
 // that belong to the normal admin order-status flow — the khatabook order is
 // already the source of truth for the metal ledger movement.
-const fulfillSourceOrders = async ({ khatabookOrder, sourceOrderIds, request, transaction }) => {
-  const orders = await db.Order.findAll({
-    where: {
-      id: sourceOrderIds,
-      shopkeeperId: khatabookOrder.shopkeeperId,
-      status: { [Op.notIn]: [ORDER_STATUSES.DELIVERED, ORDER_STATUSES.CANCELLED] },
-    },
-    transaction,
-    lock: transaction.LOCK.UPDATE,
-  });
-
-  for (const sourceOrder of orders) {
+const fulfillSourceOrders = async ({ khatabookOrder, sourceOrders, request, transaction }) => {
+  for (const sourceOrder of sourceOrders) {
     const fromStatus = sourceOrder.status;
     await sourceOrder.update(
       {
@@ -265,11 +321,20 @@ const fulfillSourceOrders = async ({ khatabookOrder, sourceOrderIds, request, tr
         orderId: sourceOrder.id,
         fromStatus,
         toStatus: ORDER_STATUSES.DELIVERED,
-        note: `Fulfilled via Khatabook order ${khatabookOrder.orderNumber}`,
+        note: `Fulfilled via toolbox delivery ${sourceOrder.orderNumber}`,
         changedByUserId: request?.auth?.sub ?? null,
       },
       { transaction },
     );
+    const [delivery] = await db.Delivery.findOrCreate({
+      where: { orderId: sourceOrder.id },
+      defaults: {
+        status: "DELIVERED",
+        deliveredAt: new Date(),
+      },
+      transaction,
+    });
+    await delivery.update({ status: "DELIVERED", deliveredAt: new Date() }, { transaction });
   }
 };
 
@@ -420,15 +485,18 @@ export const khatabookService = {
 
   async createOrder({ payload, request }) {
     return sequelize.transaction(async (transaction) => {
+      const sourceOrders = await loadSourceOrdersForFulfillment({ payload, transaction });
+      const orderNumber =
+        sourceOrders.length === 1 ? sourceOrders[0].orderNumber : payload.orderNumber;
       const order = await khatabookSettlementEngine.createOrderService({
-        payload,
+        payload: { ...payload, orderNumber },
         request,
         transaction,
       });
-      if (payload.sourceOrderIds?.length) {
+      if (sourceOrders.length) {
         await fulfillSourceOrders({
           khatabookOrder: order,
-          sourceOrderIds: payload.sourceOrderIds,
+          sourceOrders,
           request,
           transaction,
         });

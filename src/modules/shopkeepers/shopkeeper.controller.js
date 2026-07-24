@@ -4,6 +4,7 @@ import { SHOPKEEPER_STATUSES } from "../../constants/app.constants.js";
 import db from "../../database/models/InitializeModels.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
+import { mediaStorageService } from "../../integrations/media/media-storage.service.js";
 import { auditLogService } from "../audit-logs/audit-log.service.js";
 import { shopkeeperDetailsService } from "./shopkeeper.service.js";
 
@@ -666,6 +667,68 @@ const updateMyProfile = async (request, response) => {
   }
 };
 
+const uploadMyProfilePhoto = async (request, response) => {
+  try {
+    if (!request.file) {
+      throw new AppError("Profile photo is required.", {
+        statusCode: 422,
+        code: "PROFILE_PHOTO_REQUIRED",
+        details: { field: "photo" },
+      });
+    }
+    if (!request.file.mimetype.startsWith("image/")) {
+      throw new AppError("Profile photo must be an image.", {
+        statusCode: 415,
+        code: "UNSUPPORTED_PROFILE_PHOTO_TYPE",
+        details: { mimeType: request.file.mimetype },
+      });
+    }
+
+    const profile = await getCurrentShopkeeperProfile(request.auth.sub, { include: [] });
+    const result = await mediaStorageService.uploadBuffer(request.file.buffer, {
+      folder: `shopkeepers/${profile.id}/profile`,
+      resourceType: "image",
+      mimeType: request.file.mimetype,
+    });
+
+    await db.Media.create({
+      publicId: result.publicId,
+      secureUrl: result.secureUrl,
+      resourceType: result.resourceType,
+      folder: result.folder,
+      originalFilename: request.file.originalname,
+      mimeType: request.file.mimetype,
+      sizeBytes: request.file.size,
+      width: result.width ?? null,
+      height: result.height ?? null,
+      uploadedByUserId: request.auth.sub,
+      ownerType: "ShopkeeperProfile",
+      ownerId: profile.id,
+      metadata: {
+        provider: result.provider,
+        profilePhoto: true,
+        ...result.metadata,
+      },
+    });
+
+    await profile.update({ profileImageUrl: result.secureUrl });
+
+    response.json(
+      ApiResponse.success({
+        message: "Profile photo updated successfully",
+        data: await withBalance(await getCurrentShopkeeperProfile(request.auth.sub)),
+      }),
+    );
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
 const upsertMyAddress = async (request, response) => {
   try {
     const profile = await getCurrentShopkeeperProfile(request.auth.sub, { include: [] });
@@ -745,6 +808,7 @@ export const shopkeeperController = {
   requestMoreInfo,
   getMyProfile,
   updateMyProfile,
+  uploadMyProfilePhoto,
   upsertMyAddress,
   submitForApproval,
 };

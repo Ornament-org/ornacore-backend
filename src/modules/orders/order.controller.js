@@ -53,6 +53,15 @@ export const orderInclude = [
     ],
   },
   {
+    model: db.KhatabookOrder,
+    as: "fulfillmentOrder",
+    required: false,
+    include: [
+      { model: db.Metal, as: "metal" },
+      { model: db.KhatabookOrderItem, as: "items" },
+    ],
+  },
+  {
     model: db.OrderStatusHistory,
     as: "statusHistory",
     required: false,
