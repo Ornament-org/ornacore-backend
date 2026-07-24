@@ -9,7 +9,13 @@ import {
   adminLoginSchema,
   changePasswordSchema,
   emptyBodySchema,
+  otpLoginRequestSchema,
+  otpLoginVerifySchema,
+  passwordResetConfirmSchema,
+  passwordResetRequestSchema,
+  passwordResetVerifySchema,
   refreshTokenSchema,
+  shopkeeperGoogleLoginSchema,
   shopkeeperLoginSchema,
   shopkeeperRegistrationSchema,
 } from "./auth.validation.js";
@@ -58,6 +64,36 @@ shopkeeperAuthRouter.post(
   "/login",
   validate(shopkeeperLoginSchema),
   asyncHandler(authController.shopkeeperLogin),
+);
+shopkeeperAuthRouter.post(
+  "/google-login",
+  validate(shopkeeperGoogleLoginSchema),
+  asyncHandler(authController.shopkeeperGoogleLogin),
+);
+shopkeeperAuthRouter.post(
+  "/otp-login/request",
+  validate(otpLoginRequestSchema),
+  asyncHandler(authController.requestShopkeeperLoginOtp),
+);
+shopkeeperAuthRouter.post(
+  "/otp-login/verify",
+  validate(otpLoginVerifySchema),
+  asyncHandler(authController.verifyShopkeeperLoginOtp),
+);
+shopkeeperAuthRouter.post(
+  "/password-reset/request",
+  validate(passwordResetRequestSchema),
+  asyncHandler(authController.requestShopkeeperPasswordReset),
+);
+shopkeeperAuthRouter.post(
+  "/password-reset/verify",
+  validate(passwordResetVerifySchema),
+  asyncHandler(authController.verifyShopkeeperPasswordResetOtp),
+);
+shopkeeperAuthRouter.post(
+  "/password-reset/confirm",
+  validate(passwordResetConfirmSchema),
+  asyncHandler(authController.confirmShopkeeperPasswordReset),
 );
 shopkeeperAuthRouter.post(
   "/refresh",

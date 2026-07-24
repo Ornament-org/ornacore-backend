@@ -27,12 +27,20 @@ const accessInclude = [
 
 export const authRepository = {
   findUserForPasswordLogin({ email, identifier, actorTypes, transaction }) {
+    const normalizedIdentifier = identifier?.trim?.() ?? identifier;
+    const compactMobile = normalizedIdentifier?.replace?.(/[\s()-]/g, "");
+    const mobileDigits = compactMobile?.replace?.(/\D/g, "");
+    const mobileCandidates = [
+      compactMobile,
+      mobileDigits?.length === 10 ? `+91${mobileDigits}` : null,
+      mobileDigits?.startsWith("91") ? mobileDigits.slice(2) : null,
+    ].filter(Boolean);
     const contactWhere = email
       ? { email }
       : {
           [Op.or]: [
-            { email: identifier.trim().toLowerCase() },
-            { mobile: identifier.replace(/[\s()-]/g, "") },
+            { email: normalizedIdentifier.trim().toLowerCase() },
+            { mobile: { [Op.in]: [...new Set(mobileCandidates)] } },
           ],
         };
 

@@ -64,6 +64,116 @@ const shopkeeperLogin = async (request, response) => {
   }
 };
 
+const shopkeeperGoogleLogin = async (request, response) => {
+  try {
+    const result = await authService.shopkeeperGoogleLogin({
+      ...request.validated.body,
+      client: getClient(request),
+    });
+    return sendAuthResponse(response, result, "Google login successful");
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+const requestShopkeeperLoginOtp = async (request, response) => {
+  try {
+    const data = await authService.requestShopkeeperLoginOtp(request.validated.body);
+    return response.json(
+      ApiResponse.success({
+        message: "Login OTP sent",
+        data,
+      }),
+    );
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+const verifyShopkeeperLoginOtp = async (request, response) => {
+  try {
+    const result = await authService.verifyShopkeeperLoginOtp({
+      ...request.validated.body,
+      client: getClient(request),
+    });
+    return sendAuthResponse(response, result, "OTP login successful");
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+const requestShopkeeperPasswordReset = async (request, response) => {
+  try {
+    const data = await authService.requestShopkeeperPasswordReset(request.validated.body);
+    return response.json(
+      ApiResponse.success({
+        message: "Password reset OTP sent",
+        data,
+      }),
+    );
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+const verifyShopkeeperPasswordResetOtp = async (request, response) => {
+  try {
+    const data = await authService.verifyShopkeeperPasswordResetOtp(request.validated.body);
+    return response.json(
+      ApiResponse.success({
+        message: "OTP verified",
+        data,
+      }),
+    );
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+const confirmShopkeeperPasswordReset = async (request, response) => {
+  try {
+    const data = await authService.confirmShopkeeperPasswordReset(request.validated.body);
+    return response.json(
+      ApiResponse.success({
+        message: "Password reset successful. Please login with your new password.",
+        data,
+      }),
+    );
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
 /*
   POST /auth/shopkeeper/register
   {
@@ -225,6 +335,12 @@ export const authController = {
   adminLogin,
   // Authenticate shopkeeper user and return session tokens
   shopkeeperLogin,
+  shopkeeperGoogleLogin,
+  requestShopkeeperLoginOtp,
+  verifyShopkeeperLoginOtp,
+  requestShopkeeperPasswordReset,
+  verifyShopkeeperPasswordResetOtp,
+  confirmShopkeeperPasswordReset,
   // Register new shopkeeper account pending admin approval
   registerShopkeeper,
   // Refresh admin session using refresh token

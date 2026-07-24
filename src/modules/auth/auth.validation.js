@@ -58,6 +58,52 @@ export const shopkeeperLoginSchema = z.object({
   }),
 });
 
+export const shopkeeperGoogleLoginSchema = z.object({
+  ...emptyRequestParts,
+  body: z.object({
+    idToken: z.string().trim().min(20),
+  }),
+});
+
+export const otpLoginRequestSchema = z.object({
+  ...emptyRequestParts,
+  body: z.object({
+    identifier: z.string().trim().min(3).max(191),
+  }),
+});
+
+export const otpLoginVerifySchema = z.object({
+  ...emptyRequestParts,
+  body: z.object({
+    identifier: z.string().trim().min(3).max(191),
+    otp: z.string().trim().regex(/^[0-9]{4}$/, "OTP must be 4 digits"),
+  }),
+});
+
+export const passwordResetRequestSchema = z.object({
+  ...emptyRequestParts,
+  body: z.object({
+    identifier: z.string().trim().min(3).max(191),
+  }),
+});
+
+export const passwordResetVerifySchema = z.object({
+  ...emptyRequestParts,
+  body: z.object({
+    identifier: z.string().trim().min(3).max(191),
+    otp: z.string().trim().regex(/^[0-9]{4,8}$/, "OTP must be numeric"),
+  }),
+});
+
+export const passwordResetConfirmSchema = z.object({
+  ...emptyRequestParts,
+  body: z.object({
+    identifier: z.string().trim().min(3).max(191),
+    otp: z.string().trim().regex(/^[0-9]{4,8}$/, "OTP must be numeric"),
+    newPassword: passwordSchema,
+  }),
+});
+
 export const shopkeeperRegistrationSchema = z.object({
   ...emptyRequestParts,
   body: z

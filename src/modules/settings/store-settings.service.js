@@ -33,7 +33,7 @@ export const storeSettingsService = {
   async branding() {
     const settings = await getOrCreate();
     return {
-      displayName: settings.displayName || null,
+      displayName: settings.displayName || settings.businessName || null,
       logo: settings.logo || null,
       favicon: settings.favicon || null,
     };

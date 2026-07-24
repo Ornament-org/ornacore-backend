@@ -1,9 +1,12 @@
 import { sequelize } from "../../config/database.js";
+import { env } from "../../config/env.js";
 import { ACTOR_TYPES, SHOPKEEPER_STATUSES, USER_STATUSES } from "../../constants/app.constants.js";
 import db from "../../database/models/InitializeModels.js";
+import { emailOtpProvider } from "../../integrations/otp/email-otp.provider.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { authRepository } from "./auth.repository.js";
 import { hashPassword, verifyPassword } from "./auth.password.service.js";
+import { compareSecretHash, generateNumericOtp, hashSecret } from "./auth.secret.service.js";
 import { authSessionService } from "./auth.session.service.js";
 
 const assertActiveUser = (user) => {
@@ -55,6 +58,134 @@ const normalizeShopkeeperAddress = (payload) => ({
   isPrimary: true,
   isActive: true,
 });
+
+const normalizeIdentifier = (identifier) => {
+  const value = String(identifier || "").trim();
+  if (value.includes("@")) return value.toLowerCase();
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 10) return `+91${digits}`;
+  return value.replace(/[\s()-]/g, "");
+};
+
+const resetOtpHash = ({ userId, destination, otp }) => hashSecret(`${userId}:${destination}:${otp}`);
+
+const maskEmail = (email) => email.replace(/^(.{2}).*(@.*)$/, "$1***$2");
+
+const findPasswordResetUser = async (identifier, transaction) => {
+  const normalized = normalizeIdentifier(identifier);
+  return authRepository.findUserForPasswordLogin({
+    identifier: normalized,
+    actorTypes: authSessionService.allowedShopkeeperActorTypes,
+    transaction,
+  });
+};
+
+const getOtpChallenge = async ({ user, destination, otp, purpose, transaction }) => {
+  const challenge = await db.OtpChallenge.findOne({
+    where: {
+      userId: user.id,
+      destination,
+      purpose,
+      consumedAt: null,
+    },
+    order: [["createdAt", "DESC"]],
+    transaction,
+    lock: transaction?.LOCK?.UPDATE,
+  });
+
+  if (!challenge || challenge.expiresAt <= new Date()) {
+    throw new AppError("OTP is invalid or expired", {
+      statusCode: 422,
+      code: "INVALID_OR_EXPIRED_OTP",
+    });
+  }
+
+  if (challenge.attempts >= env.OTP_MAX_ATTEMPTS) {
+    throw new AppError("Too many OTP attempts. Please request a new OTP.", {
+      statusCode: 429,
+      code: "OTP_ATTEMPTS_EXCEEDED",
+    });
+  }
+
+  const valid = compareSecretHash(
+    `${user.id}:${destination}:${otp}`,
+    challenge.codeHash,
+  );
+  if (!valid) {
+    await challenge.increment("attempts", { transaction });
+    throw new AppError("OTP is invalid or expired", {
+      statusCode: 422,
+      code: "INVALID_OR_EXPIRED_OTP",
+    });
+  }
+
+  return challenge;
+};
+
+const getPasswordResetChallenge = (options) =>
+  getOtpChallenge({ ...options, purpose: "PASSWORD_RESET" });
+
+const getLoginOtpChallenge = (options) => getOtpChallenge({ ...options, purpose: "LOGIN" });
+
+const createEmailOtpChallenge = async ({ user, destination, purpose, digits, transaction }) => {
+  const otp = generateNumericOtp(digits);
+  const expiresInMinutes = Math.ceil(env.OTP_TTL_SECONDS / 60);
+  const expiresAt = new Date(Date.now() + env.OTP_TTL_SECONDS * 1000);
+
+  await db.OtpChallenge.update(
+    { consumedAt: new Date() },
+    {
+      where: {
+        userId: user.id,
+        purpose,
+        consumedAt: null,
+      },
+      transaction,
+    },
+  );
+  await db.OtpChallenge.create(
+    {
+      userId: user.id,
+      purpose,
+      channel: "EMAIL",
+      destination,
+      codeHash: resetOtpHash({ userId: user.id, destination, otp }),
+      expiresAt,
+    },
+    { transaction },
+  );
+
+  return { otp, expiresInMinutes };
+};
+
+const verifyGoogleIdToken = async (idToken) => {
+  if (!env.GOOGLE_CLIENT_ID) {
+    throw new AppError("Google login is not configured", {
+      statusCode: 503,
+      code: "GOOGLE_LOGIN_NOT_CONFIGURED",
+    });
+  }
+
+  const response = await globalThis.fetch(
+    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
+  );
+  if (!response.ok) {
+    throw new AppError("Google login token is invalid", {
+      statusCode: 401,
+      code: "INVALID_GOOGLE_TOKEN",
+    });
+  }
+
+  const profile = await response.json();
+  if (profile.aud !== env.GOOGLE_CLIENT_ID || profile.email_verified !== "true" || !profile.email) {
+    throw new AppError("Google account could not be verified", {
+      statusCode: 401,
+      code: "GOOGLE_ACCOUNT_NOT_VERIFIED",
+    });
+  }
+
+  return { email: profile.email.toLowerCase() };
+};
 
 export const serializeAuthenticatedUser = (user) => ({
   id: String(user.id),
@@ -118,7 +249,7 @@ export const authService = {
 
   async shopkeeperLogin({ identifier, password, client }) {
     const user = await authRepository.findUserForPasswordLogin({
-      identifier,
+      identifier: normalizeIdentifier(identifier),
       actorTypes: authSessionService.allowedShopkeeperActorTypes,
     });
 
@@ -132,6 +263,159 @@ export const authService = {
     });
 
     return { user: serializeAuthenticatedUser(user), session };
+  },
+
+  async shopkeeperGoogleLogin({ idToken, client }) {
+    const { email } = await verifyGoogleIdToken(idToken);
+    const user = await authRepository.findUserForPasswordLogin({
+      email,
+      actorTypes: authSessionService.allowedShopkeeperActorTypes,
+    });
+
+    assertActiveUser(user);
+    assertShopkeeperCanLogin(user.shopkeeperProfile);
+
+    const session = await sequelize.transaction(async (transaction) => {
+      await authRepository.updateLastLogin(user, { transaction });
+      return authSessionService.issueSession({ user, client, transaction });
+    });
+
+    return { user: serializeAuthenticatedUser(user), session };
+  },
+
+  async requestShopkeeperLoginOtp({ identifier }) {
+    const user = await findPasswordResetUser(identifier);
+    assertActiveUser(user);
+    assertShopkeeperCanLogin(user.shopkeeperProfile);
+
+    const destination = user.email?.toLowerCase();
+    if (!destination) {
+      throw new AppError("OTP login requires a registered email address", {
+        statusCode: 422,
+        code: "OTP_LOGIN_EMAIL_REQUIRED",
+      });
+    }
+
+    const { otp, expiresInMinutes } = await sequelize.transaction((transaction) =>
+      createEmailOtpChallenge({
+        user,
+        destination,
+        purpose: "LOGIN",
+        digits: 4,
+        transaction,
+      }),
+    );
+
+    await emailOtpProvider.send({ destination, otp, expiresInMinutes });
+
+    return {
+      destination: maskEmail(destination),
+      expiresInSeconds: env.OTP_TTL_SECONDS,
+    };
+  },
+
+  async verifyShopkeeperLoginOtp({ identifier, otp, client }) {
+    const user = await findPasswordResetUser(identifier);
+    assertActiveUser(user);
+    assertShopkeeperCanLogin(user.shopkeeperProfile);
+
+    const destination = user.email?.toLowerCase();
+    if (!destination) {
+      throw new AppError("OTP login requires a registered email address", {
+        statusCode: 422,
+        code: "OTP_LOGIN_EMAIL_REQUIRED",
+      });
+    }
+
+    const session = await sequelize.transaction(async (transaction) => {
+      const challenge = await getLoginOtpChallenge({ user, destination, otp, transaction });
+      await challenge.update({ consumedAt: new Date() }, { transaction });
+      await authRepository.updateLastLogin(user, { transaction });
+      return authSessionService.issueSession({ user, client, transaction });
+    });
+
+    return { user: serializeAuthenticatedUser(user), session };
+  },
+
+  async requestShopkeeperPasswordReset({ identifier }) {
+    const user = await findPasswordResetUser(identifier);
+    assertActiveUser(user);
+    assertShopkeeperCanLogin(user.shopkeeperProfile);
+
+    const destination = user.email?.toLowerCase();
+    if (!destination) {
+      throw new AppError("Password reset requires a registered email address", {
+        statusCode: 422,
+        code: "PASSWORD_RESET_EMAIL_REQUIRED",
+      });
+    }
+
+    const { otp, expiresInMinutes } = await sequelize.transaction((transaction) =>
+      createEmailOtpChallenge({
+        user,
+        destination,
+        purpose: "PASSWORD_RESET",
+        digits: 6,
+        transaction,
+      }),
+    );
+
+    await emailOtpProvider.send({ destination, otp, expiresInMinutes });
+
+    return {
+      destination: maskEmail(destination),
+      expiresInSeconds: env.OTP_TTL_SECONDS,
+    };
+  },
+
+  async verifyShopkeeperPasswordResetOtp({ identifier, otp }) {
+    const user = await findPasswordResetUser(identifier);
+    assertActiveUser(user);
+    assertShopkeeperCanLogin(user.shopkeeperProfile);
+    const destination = user.email?.toLowerCase();
+    if (!destination) {
+      throw new AppError("Password reset requires a registered email address", {
+        statusCode: 422,
+        code: "PASSWORD_RESET_EMAIL_REQUIRED",
+      });
+    }
+
+    await sequelize.transaction(async (transaction) => {
+      await getPasswordResetChallenge({ user, destination, otp, transaction });
+    });
+
+    return { verified: true };
+  },
+
+  async confirmShopkeeperPasswordReset({ identifier, otp, newPassword }) {
+    const user = await findPasswordResetUser(identifier);
+    assertActiveUser(user);
+    assertShopkeeperCanLogin(user.shopkeeperProfile);
+    const destination = user.email?.toLowerCase();
+    if (!destination) {
+      throw new AppError("Password reset requires a registered email address", {
+        statusCode: 422,
+        code: "PASSWORD_RESET_EMAIL_REQUIRED",
+      });
+    }
+
+    await sequelize.transaction(async (transaction) => {
+      const challenge = await getPasswordResetChallenge({ user, destination, otp, transaction });
+      await user.update(
+        {
+          passwordHash: await hashPassword(newPassword),
+          mustChangePassword: false,
+        },
+        { transaction },
+      );
+      await challenge.update({ consumedAt: new Date() }, { transaction });
+      await db.RefreshToken.update(
+        { revokedAt: new Date() },
+        { where: { userId: user.id, revokedAt: null }, transaction },
+      );
+    });
+
+    return { reset: true };
   },
 
   async registerShopkeeper(payload, client) {
