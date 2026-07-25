@@ -37,6 +37,8 @@ const envSchema = z.object({
   DB_LOGGING: booleanString,
   DB_POOL_MIN: z.coerce.number().int().nonnegative().default(0),
   DB_POOL_MAX: z.coerce.number().int().positive().default(10),
+  DB_CONNECT_RETRIES: z.coerce.number().int().nonnegative().default(12),
+  DB_CONNECT_RETRY_DELAY_MS: z.coerce.number().int().positive().default(5000),
 
   REDIS_ENABLED: booleanString,
   REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
