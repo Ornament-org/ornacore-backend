@@ -97,17 +97,47 @@ const normalizeError = (error) => {
   });
 };
 
+const scannerPathPatterns = [
+  /^\/actuator(?:\/|$)/,
+  /^\/@vite(?:\/|$)/,
+  /^\/\.vscode(?:\/|$)/,
+  /^\/trace\.axd$/i,
+  /^\/\.env(?:\.|$|\/)/,
+  /^\/wp-/,
+  /^\/phpmyadmin(?:\/|$)/i,
+];
+
+const isScannerProbe = (request) =>
+  scannerPathPatterns.some((pattern) => pattern.test(request.path ?? request.originalUrl));
+
+const notFoundLogPayload = (request, normalized) => ({
+  requestId: request.id,
+  code: normalized.code,
+  statusCode: normalized.statusCode,
+  method: request.method,
+  path: request.originalUrl,
+  ip: request.ip,
+  userAgent: request.get("user-agent"),
+});
+
 export const errorHandler = (error, request, response, _next) => {
   const normalized = normalizeError(error);
-  const logPayload = {
-    error,
-    requestId: request.id,
-    code: normalized.code,
-    statusCode: normalized.statusCode,
-  };
 
-  if (normalized.statusCode >= 500) logger.error(normalized.message, logPayload);
-  else logger.warn(normalized.message, logPayload);
+  if (normalized.code === "ROUTE_NOT_FOUND") {
+    const logPayload = notFoundLogPayload(request, normalized);
+    const log = isScannerProbe(request) ? logger.debug : logger.info;
+    log(normalized.message, logPayload);
+  } else {
+    const logPayload = {
+      error,
+      requestId: request.id,
+      code: normalized.code,
+      statusCode: normalized.statusCode,
+    };
+
+    if (normalized.statusCode >= 500) logger.error(normalized.message, logPayload);
+    else logger.warn(normalized.message, logPayload);
+  }
 
   const details =
     normalized.statusCode < 500 || env.NODE_ENV !== "production" ? normalized.details : undefined;
