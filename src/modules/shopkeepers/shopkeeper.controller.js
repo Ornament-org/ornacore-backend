@@ -59,7 +59,7 @@ export const withBalance = async (profile) => {
     db.KhatabookOrder.findAll({
       where: { shopkeeperId: profile.id },
       include: [{ model: db.Metal, as: "metal", attributes: ["id", "name", "code"], required: false }],
-      attributes: ["metalId", "outstandingDue"],
+      attributes: ["metalId", "outstandingDue", "cashDueAmount"],
     }).catch(() => []),
     db.Metal.findAll({
       where: { isActive: true },
@@ -71,6 +71,10 @@ export const withBalance = async (profile) => {
   const dueAmount = (account?.journalLines ?? []).reduce(
     (balance, line) =>
       balance + (line.side === "DEBIT" ? Number(line.amount) : -Number(line.amount)),
+    0,
+  );
+  const khatabookCashDue = khatabookOrders.reduce(
+    (balance, order) => balance + Number(order.cashDueAmount ?? 0),
     0,
   );
 
@@ -99,7 +103,7 @@ export const withBalance = async (profile) => {
     };
   });
 
-  return { ...profile.toJSON(), dueAmount: dueAmount.toFixed(2), metalDues };
+  return { ...profile.toJSON(), dueAmount: (dueAmount + khatabookCashDue).toFixed(2), metalDues };
 };
 
 export const getProfile = async (id, options = {}) => {
@@ -213,7 +217,7 @@ export const upsertPrimaryAddress = async ({ profile, payload, transaction }) =>
       addressLine1: payload.addressLine1,
       addressLine2: payload.addressLine2 ?? null,
       city: payload.city,
-      state: payload.state,
+      state: payload.state ?? "",
       pincode: payload.pincode,
     },
     { transaction },
@@ -352,12 +356,12 @@ const update = async (request, response) => {
           addressLine1: request.validated.body.addressLine1 ?? profile.addressLine1,
           addressLine2: request.validated.body.addressLine2 ?? profile.addressLine2,
           city: request.validated.body.city ?? profile.city,
-          state: request.validated.body.state ?? profile.state,
+          state: request.validated.body.state ?? profile.state ?? "",
           pincode: request.validated.body.pincode ?? profile.pincode,
           country: "India",
           isPrimary: true,
         };
-        if (!nextAddress.addressLine1 || !nextAddress.city || !nextAddress.state || !nextAddress.pincode) {
+        if (!nextAddress.addressLine1 || !nextAddress.city || !nextAddress.pincode) {
           throw new AppError("Complete address is required before saving address changes", {
             statusCode: 422,
             code: "SHOPKEEPER_ADDRESS_INCOMPLETE",

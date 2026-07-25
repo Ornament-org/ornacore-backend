@@ -28,6 +28,7 @@ const handleError = (response, error) => {
     ApiResponse.error({
       code: error.code || "INTERNAL_ERROR",
       message: error.message || "An unexpected error occurred",
+      details: error.details,
     }),
   );
 };

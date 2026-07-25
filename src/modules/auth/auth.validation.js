@@ -35,7 +35,7 @@ const addressSchema = z.object({
   addressLine1: z.string().trim().min(3).max(255),
   addressLine2: z.string().trim().max(255).optional(),
   city: z.string().trim().min(2).max(120),
-  state: z.string().trim().min(2).max(120),
+  state: z.string().trim().max(120).optional().default(""),
   pincode: z.string().trim().min(4).max(12),
   latitude: latitudeSchema.optional(),
   longitude: longitudeSchema.optional(),
@@ -65,6 +65,8 @@ export const shopkeeperGoogleLoginSchema = z.object({
   }),
 });
 
+export const adminGoogleLoginSchema = shopkeeperGoogleLoginSchema;
+
 export const otpLoginRequestSchema = z.object({
   ...emptyRequestParts,
   body: z.object({
@@ -72,10 +74,25 @@ export const otpLoginRequestSchema = z.object({
   }),
 });
 
+export const adminOtpLoginRequestSchema = z.object({
+  ...emptyRequestParts,
+  body: z.object({
+    email: emailSchema,
+  }),
+});
+
 export const otpLoginVerifySchema = z.object({
   ...emptyRequestParts,
   body: z.object({
     identifier: z.string().trim().min(3).max(191),
+    otp: z.string().trim().regex(/^[0-9]{4}$/, "OTP must be 4 digits"),
+  }),
+});
+
+export const adminOtpLoginVerifySchema = z.object({
+  ...emptyRequestParts,
+  body: z.object({
+    email: emailSchema,
     otp: z.string().trim().regex(/^[0-9]{4}$/, "OTP must be 4 digits"),
   }),
 });
@@ -104,6 +121,21 @@ export const passwordResetConfirmSchema = z.object({
   }),
 });
 
+export const registrationEmailOtpRequestSchema = z.object({
+  ...emptyRequestParts,
+  body: z.object({
+    email: emailSchema,
+  }),
+});
+
+export const registrationEmailOtpVerifySchema = z.object({
+  ...emptyRequestParts,
+  body: z.object({
+    email: emailSchema,
+    otp: z.string().trim().regex(/^[0-9]{4,8}$/, "OTP must be numeric"),
+  }),
+});
+
 export const shopkeeperRegistrationSchema = z.object({
   ...emptyRequestParts,
   body: z
@@ -112,12 +144,13 @@ export const shopkeeperRegistrationSchema = z.object({
       shopName: z.string().trim().min(2).max(191),
       email: emailSchema.optional(),
       mobile: mobileSchema.optional(),
-      password: passwordSchema,
+      password: passwordSchema.optional(),
+      emailOtp: z.string().trim().regex(/^[0-9]{4,8}$/, "OTP must be numeric").optional(),
       address: addressSchema.optional(),
       addressLine1: z.string().trim().min(3).max(255).optional(),
       addressLine2: z.string().trim().max(255).optional(),
       city: z.string().trim().min(2).max(120).optional(),
-      state: z.string().trim().min(2).max(120).optional(),
+      state: z.string().trim().max(120).optional().default(""),
       pincode: z.string().trim().min(4).max(12).optional(),
       latitude: latitudeSchema.optional(),
       longitude: longitudeSchema.optional(),
@@ -128,8 +161,12 @@ export const shopkeeperRegistrationSchema = z.object({
       message: "Either email or mobile is required",
       path: ["email"],
     })
-    .refine(({ address, addressLine1, city, state, pincode }) => {
-      return address || (addressLine1 && city && state && pincode);
+    .refine(({ password, email, emailOtp }) => password || (email && emailOtp), {
+      message: "Verify email with OTP when password is not provided",
+      path: ["emailOtp"],
+    })
+    .refine(({ address, addressLine1, city, pincode }) => {
+      return address || (addressLine1 && city && pincode);
     }, {
       message: "Shop address is required",
       path: ["address"],

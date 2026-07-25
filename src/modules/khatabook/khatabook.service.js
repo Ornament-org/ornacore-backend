@@ -142,6 +142,7 @@ const mapOrder = (order, metalAccount = null) => {
     metal: order.metal ? mapMetal(order.metal) : null,
     entryDate: order.entryDate,
     notes: order.notes,
+    cashDueAmount: money(order.cashDueAmount ?? 0),
     previousDue: accountDueBeforeOrder,
     fineDelivered: q(order.fineDelivered),
     creditReceived: q(order.creditReceived),

@@ -1,6 +1,6 @@
 import { DataTypes } from "sequelize";
 import { sequelize } from "../../config/database.js";
-import { bigIntId, foreignBigInt, modelOptions, quantity } from "../../database/models/model.helpers.js";
+import { bigIntId, foreignBigInt, modelOptions, money, quantity } from "../../database/models/model.helpers.js";
 import { KHATABOOK_ORDER_STATUSES } from "./khatabook.constants.js";
 
 const KhatabookOrder = sequelize.define(
@@ -12,6 +12,7 @@ const KhatabookOrder = sequelize.define(
     metalId: foreignBigInt(),
     entryDate: { type: DataTypes.DATE, allowNull: false },
     notes: { type: DataTypes.TEXT, allowNull: true },
+    cashDueAmount: money({ defaultValue: "0.0000" }),
     previousDue: quantity({ defaultValue: "0.000" }),
     fineDelivered: quantity({ defaultValue: "0.000" }),
     creditReceived: quantity({ defaultValue: "0.000" }),

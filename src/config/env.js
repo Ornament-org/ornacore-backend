@@ -49,6 +49,7 @@ const envSchema = z.object({
   SUPER_ADMIN_EMAIL: optionalString,
   SUPER_ADMIN_PASSWORD: optionalString,
   GOOGLE_CLIENT_ID: optionalString,
+  ADMIN_GOOGLE_CLIENT_ID: optionalString,
 
   CORS_ORIGINS: z
     .string()

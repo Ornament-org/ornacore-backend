@@ -161,6 +161,7 @@ const getCurrentShopkeeperLedger = async (request, response) => {
     ],
     "notes": "Special order",
     "overrideCreditLimit": false,
+    "cashDueAmount": 1500,
     "collection": { "metalReceived": 0, "cashReceived": 5000, "metalRate": 62000 }
   }
 */

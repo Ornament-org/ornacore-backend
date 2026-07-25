@@ -18,6 +18,15 @@ const assertActiveUser = (user) => {
   }
 };
 
+const assertActiveAdminUser = (user) => {
+  if (!user || user.status !== USER_STATUSES.ACTIVE) {
+    throw new AppError("No admin account is registered with this email", {
+      statusCode: 401,
+      code: "ADMIN_ACCOUNT_NOT_FOUND",
+    });
+  }
+};
+
 const assertPassword = async (password, passwordHash) => {
   if (!passwordHash || !(await verifyPassword(password, passwordHash))) {
     throw new AppError("Invalid credentials or inactive account", {
@@ -50,7 +59,7 @@ const normalizeShopkeeperAddress = (payload) => ({
   addressLine1: payload.address?.addressLine1 ?? payload.addressLine1,
   addressLine2: payload.address?.addressLine2 ?? payload.addressLine2 ?? null,
   city: payload.address?.city ?? payload.city,
-  state: payload.address?.state ?? payload.state,
+  state: payload.address?.state ?? payload.state ?? "",
   pincode: payload.address?.pincode ?? payload.pincode,
   latitude: payload.address?.latitude ?? payload.latitude ?? null,
   longitude: payload.address?.longitude ?? payload.longitude ?? null,
@@ -67,7 +76,8 @@ const normalizeIdentifier = (identifier) => {
   return value.replace(/[\s()-]/g, "");
 };
 
-const resetOtpHash = ({ userId, destination, otp }) => hashSecret(`${userId}:${destination}:${otp}`);
+const otpHashSubject = ({ userId, destination }) => `${userId ?? "registration"}:${destination}`;
+const resetOtpHash = ({ userId, destination, otp }) => hashSecret(`${otpHashSubject({ userId, destination })}:${otp}`);
 
 const maskEmail = (email) => email.replace(/^(.{2}).*(@.*)$/, "$1***$2");
 
@@ -80,10 +90,17 @@ const findPasswordResetUser = async (identifier, transaction) => {
   });
 };
 
+const findAdminUserByEmail = async (email, transaction) =>
+  authRepository.findUserForPasswordLogin({
+    email: email.toLowerCase(),
+    actorTypes: authSessionService.allowedAdminActorTypes,
+    transaction,
+  });
+
 const getOtpChallenge = async ({ user, destination, otp, purpose, transaction }) => {
   const challenge = await db.OtpChallenge.findOne({
     where: {
-      userId: user.id,
+      userId: user?.id ?? null,
       destination,
       purpose,
       consumedAt: null,
@@ -108,7 +125,7 @@ const getOtpChallenge = async ({ user, destination, otp, purpose, transaction })
   }
 
   const valid = compareSecretHash(
-    `${user.id}:${destination}:${otp}`,
+    `${otpHashSubject({ userId: user?.id, destination })}:${otp}`,
     challenge.codeHash,
   );
   if (!valid) {
@@ -127,7 +144,7 @@ const getPasswordResetChallenge = (options) =>
 
 const getLoginOtpChallenge = (options) => getOtpChallenge({ ...options, purpose: "LOGIN" });
 
-const createEmailOtpChallenge = async ({ user, destination, purpose, digits, transaction }) => {
+const createEmailOtpChallenge = async ({ user = null, destination, purpose, digits, transaction }) => {
   const otp = generateNumericOtp(digits);
   const expiresInMinutes = Math.ceil(env.OTP_TTL_SECONDS / 60);
   const expiresAt = new Date(Date.now() + env.OTP_TTL_SECONDS * 1000);
@@ -136,8 +153,9 @@ const createEmailOtpChallenge = async ({ user, destination, purpose, digits, tra
     { consumedAt: new Date() },
     {
       where: {
-        userId: user.id,
+        userId: user?.id ?? null,
         purpose,
+        destination,
         consumedAt: null,
       },
       transaction,
@@ -145,11 +163,11 @@ const createEmailOtpChallenge = async ({ user, destination, purpose, digits, tra
   );
   await db.OtpChallenge.create(
     {
-      userId: user.id,
+      userId: user?.id ?? null,
       purpose,
       channel: "EMAIL",
       destination,
-      codeHash: resetOtpHash({ userId: user.id, destination, otp }),
+      codeHash: resetOtpHash({ userId: user?.id, destination, otp }),
       expiresAt,
     },
     { transaction },
@@ -158,8 +176,8 @@ const createEmailOtpChallenge = async ({ user, destination, purpose, digits, tra
   return { otp, expiresInMinutes };
 };
 
-const verifyGoogleIdToken = async (idToken) => {
-  if (!env.GOOGLE_CLIENT_ID) {
+const verifyGoogleIdToken = async (idToken, clientId = env.GOOGLE_CLIENT_ID) => {
+  if (!clientId) {
     throw new AppError("Google login is not configured", {
       statusCode: 503,
       code: "GOOGLE_LOGIN_NOT_CONFIGURED",
@@ -177,7 +195,7 @@ const verifyGoogleIdToken = async (idToken) => {
   }
 
   const profile = await response.json();
-  if (profile.aud !== env.GOOGLE_CLIENT_ID || profile.email_verified !== "true" || !profile.email) {
+  if (profile.aud !== clientId || profile.email_verified !== "true" || !profile.email) {
     throw new AppError("Google account could not be verified", {
       statusCode: 401,
       code: "GOOGLE_ACCOUNT_NOT_VERIFIED",
@@ -186,6 +204,9 @@ const verifyGoogleIdToken = async (idToken) => {
 
   return { email: profile.email.toLowerCase() };
 };
+
+const getRegistrationEmailChallenge = (options) =>
+  getOtpChallenge({ ...options, user: null, purpose: "REGISTRATION" });
 
 export const serializeAuthenticatedUser = (user) => ({
   id: String(user.id),
@@ -240,6 +261,58 @@ export const authService = {
     await assertPassword(password, user.passwordHash);
 
     const session = await sequelize.transaction(async (transaction) => {
+      await authRepository.updateLastLogin(user, { transaction });
+      return authSessionService.issueSession({ user, client, transaction });
+    });
+
+    return { user: serializeAuthenticatedUser(user), session };
+  },
+
+  async adminGoogleLogin({ idToken, client }) {
+    const { email } = await verifyGoogleIdToken(idToken, env.ADMIN_GOOGLE_CLIENT_ID ?? env.GOOGLE_CLIENT_ID);
+    const user = await findAdminUserByEmail(email);
+
+    assertActiveAdminUser(user);
+
+    const session = await sequelize.transaction(async (transaction) => {
+      await authRepository.updateLastLogin(user, { transaction });
+      return authSessionService.issueSession({ user, client, transaction });
+    });
+
+    return { user: serializeAuthenticatedUser(user), session };
+  },
+
+  async requestAdminLoginOtp({ email }) {
+    const destination = email.toLowerCase();
+    const user = await findAdminUserByEmail(destination);
+    assertActiveAdminUser(user);
+
+    const { otp, expiresInMinutes } = await sequelize.transaction((transaction) =>
+      createEmailOtpChallenge({
+        user,
+        destination,
+        purpose: "LOGIN",
+        digits: 4,
+        transaction,
+      }),
+    );
+
+    await emailOtpProvider.send({ destination, otp, expiresInMinutes });
+
+    return {
+      destination: maskEmail(destination),
+      expiresInSeconds: env.OTP_TTL_SECONDS,
+    };
+  },
+
+  async verifyAdminLoginOtp({ email, otp, client }) {
+    const destination = email.toLowerCase();
+    const user = await findAdminUserByEmail(destination);
+    assertActiveAdminUser(user);
+
+    const session = await sequelize.transaction(async (transaction) => {
+      const challenge = await getLoginOtpChallenge({ user, destination, otp, transaction });
+      await challenge.update({ consumedAt: new Date() }, { transaction });
       await authRepository.updateLastLogin(user, { transaction });
       return authSessionService.issueSession({ user, client, transaction });
     });
@@ -335,6 +408,43 @@ export const authService = {
     });
 
     return { user: serializeAuthenticatedUser(user), session };
+  },
+
+  async requestShopkeeperRegistrationEmailOtp({ email }) {
+    const destination = email.toLowerCase();
+    const existing = await authRepository.findExistingContact({ email: destination });
+
+    if (existing) {
+      throw new AppError("An account already exists with this email", {
+        statusCode: 409,
+        code: "ACCOUNT_ALREADY_EXISTS",
+      });
+    }
+
+    const { otp, expiresInMinutes } = await sequelize.transaction((transaction) =>
+      createEmailOtpChallenge({
+        destination,
+        purpose: "REGISTRATION",
+        digits: 6,
+        transaction,
+      }),
+    );
+
+    await emailOtpProvider.send({ destination, otp, expiresInMinutes });
+
+    return {
+      destination: maskEmail(destination),
+      expiresInSeconds: env.OTP_TTL_SECONDS,
+    };
+  },
+
+  async verifyShopkeeperRegistrationEmailOtp({ email, otp }) {
+    const destination = email.toLowerCase();
+    await sequelize.transaction(async (transaction) => {
+      await getRegistrationEmailChallenge({ destination, otp, transaction });
+    });
+
+    return { verified: true };
   },
 
   async requestShopkeeperPasswordReset({ identifier }) {
@@ -440,13 +550,25 @@ export const authService = {
         });
       }
 
+      let verifiedEmailAt = null;
+      let registrationEmailChallenge = null;
+      if (normalized.email && normalized.emailOtp) {
+        registrationEmailChallenge = await getRegistrationEmailChallenge({
+          destination: normalized.email,
+          otp: normalized.emailOtp,
+          transaction,
+        });
+        verifiedEmailAt = new Date();
+      }
+
       const user = await authRepository.createUser(
         {
           email: normalized.email ?? null,
           mobile: normalized.mobile ?? null,
-          passwordHash: await hashPassword(normalized.password),
+          passwordHash: normalized.password ? await hashPassword(normalized.password) : null,
           actorType: ACTOR_TYPES.SHOPKEEPER,
           status: USER_STATUSES.ACTIVE,
+          emailVerifiedAt: verifiedEmailAt,
         },
         { transaction },
       );
@@ -459,7 +581,7 @@ export const authService = {
           addressLine1: normalized.address?.addressLine1 ?? normalized.addressLine1,
           addressLine2: normalized.address?.addressLine2 ?? normalized.addressLine2 ?? null,
           city: normalized.address?.city ?? normalized.city,
-          state: normalized.address?.state ?? normalized.state,
+          state: normalized.address?.state ?? normalized.state ?? "",
           pincode: normalized.address?.pincode ?? normalized.pincode,
           gstNumber: normalized.gstNumber,
           businessType: normalized.businessType ?? null,
@@ -477,6 +599,10 @@ export const authService = {
         },
         { transaction },
       );
+
+      if (registrationEmailChallenge) {
+        await registrationEmailChallenge.update({ consumedAt: new Date() }, { transaction });
+      }
 
       user.shopkeeperProfile = profile;
       user.shopkeeperProfile.addresses = [address];

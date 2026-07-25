@@ -33,7 +33,7 @@ export const addressBody = z.object({
   addressLine1: z.string().trim().min(3).max(255),
   addressLine2: z.string().trim().max(255).nullable().optional(),
   city: z.string().trim().min(2).max(120),
-  state: z.string().trim().min(2).max(120),
+  state: z.string().trim().max(120).optional().default(""),
   pincode: z.string().trim().min(4).max(12),
   country: z.string().trim().min(2).max(80).default("India"),
   isPrimary: z.boolean().optional(),

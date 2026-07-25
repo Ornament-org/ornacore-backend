@@ -6,7 +6,10 @@ import { asyncHandler } from "../../shared/http/asyncHandler.js";
 import { createModuleRouter } from "../module.router.js";
 import { authController } from "./auth.controller.js";
 import {
+  adminGoogleLoginSchema,
   adminLoginSchema,
+  adminOtpLoginRequestSchema,
+  adminOtpLoginVerifySchema,
   changePasswordSchema,
   emptyBodySchema,
   otpLoginRequestSchema,
@@ -14,6 +17,8 @@ import {
   passwordResetConfirmSchema,
   passwordResetRequestSchema,
   passwordResetVerifySchema,
+  registrationEmailOtpRequestSchema,
+  registrationEmailOtpVerifySchema,
   refreshTokenSchema,
   shopkeeperGoogleLoginSchema,
   shopkeeperLoginSchema,
@@ -27,6 +32,21 @@ adminAuthRouter.post(
   "/login",
   validate(adminLoginSchema),
   asyncHandler(authController.adminLogin),
+);
+adminAuthRouter.post(
+  "/google-login",
+  validate(adminGoogleLoginSchema),
+  asyncHandler(authController.adminGoogleLogin),
+);
+adminAuthRouter.post(
+  "/otp-login/request",
+  validate(adminOtpLoginRequestSchema),
+  asyncHandler(authController.requestAdminLoginOtp),
+);
+adminAuthRouter.post(
+  "/otp-login/verify",
+  validate(adminOtpLoginVerifySchema),
+  asyncHandler(authController.verifyAdminLoginOtp),
 );
 adminAuthRouter.post(
   "/refresh",
@@ -59,6 +79,16 @@ shopkeeperAuthRouter.post(
   "/register",
   validate(shopkeeperRegistrationSchema),
   asyncHandler(authController.registerShopkeeper),
+);
+shopkeeperAuthRouter.post(
+  "/registration-email-otp/request",
+  validate(registrationEmailOtpRequestSchema),
+  asyncHandler(authController.requestShopkeeperRegistrationEmailOtp),
+);
+shopkeeperAuthRouter.post(
+  "/registration-email-otp/verify",
+  validate(registrationEmailOtpVerifySchema),
+  asyncHandler(authController.verifyShopkeeperRegistrationEmailOtp),
 );
 shopkeeperAuthRouter.post(
   "/login",
