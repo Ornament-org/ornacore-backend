@@ -4,7 +4,9 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import path from "node:path";
+import { URL } from "node:url";
 import { env } from "./config/env.js";
+import { logger } from "./config/logger.js";
 import { apiRateLimiter } from "./middlewares/rateLimiters.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import { notFound } from "./middlewares/notFound.js";
@@ -21,6 +23,25 @@ import { collectionPublicRouter } from "./modules/collections/collection.routes.
 import { metalPublicRouter } from "./modules/metals/metal.routes.js";
 import { bannerPublicRouter } from "./modules/banners/banner.routes.js";
 
+const defaultCorsOrigins = [
+  "https://wolfan.jipanditji.com",
+  "https://tool.wolfan.jipanditji.com",
+];
+
+const normalizeOrigin = (origin) => {
+  try {
+    return new URL(origin).origin;
+  } catch {
+    return origin.replace(/\/+$/, "");
+  }
+};
+
+const corsOrigins = new Set(
+  [...env.CORS_ORIGINS, env.ADMIN_APP_URL, ...defaultCorsOrigins]
+    .filter(Boolean)
+    .map(normalizeOrigin),
+);
+
 export const createApp = () => {
   const app = express();
 
@@ -32,7 +53,7 @@ export const createApp = () => {
   app.use(
     cors({
       origin(origin, callback) {
-        if (!origin || env.CORS_ORIGINS.includes(origin)) return callback(null, true);
+        if (!origin || corsOrigins.has(normalizeOrigin(origin))) return callback(null, true);
         return callback(
           new AppError("Origin is not allowed by CORS", {
             statusCode: 403,
@@ -63,7 +84,7 @@ export const createApp = () => {
         message: `Welcome to the db ${env.DB_NAME} in ${env.NODE_ENV} backend of OrnaMent`
       });
     } catch (error) {
-      console.error("Error in home route:", error);
+      logger.error("Error in home route", { error });
       res.status(500).json({ error: "Internal server error" });
     }
   });
