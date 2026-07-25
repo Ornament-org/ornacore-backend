@@ -4,9 +4,13 @@ npm-debug.log
 .gitignore
 .env
 .env.*
-!.env.example
 coverage
 logs
 uploads
+backups
+tmp
+temp
 docs
 tests
+dist
+.DS_Store
