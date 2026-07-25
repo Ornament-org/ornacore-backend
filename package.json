@@ -30,6 +30,7 @@
     "db:seed": "sequelize-cli db:seed:all --config src/config/sequelize-cli.cjs --seeders-path src/database/seeders",
     "db:seed:undo": "sequelize-cli db:seed:undo:all --config src/config/sequelize-cli.cjs --seeders-path src/database/seeders",
     "db:seed:create": "node scripts/generate-db-file.js seed",
+    "db:backup": "node scripts/run-db-backup.js",
     "auth:create-admin": "node scripts/create-super-admin.js",
     "auth:smoke-test": "node scripts/smoke-test-auth.js"
   },

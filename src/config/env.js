@@ -6,6 +6,11 @@ const booleanString = z
   .default("false")
   .transform((value) => value === "true");
 
+const trueBooleanString = z
+  .enum(["true", "false"])
+  .default("true")
+  .transform((value) => value === "true");
+
 const optionalString = z
   .string()
   .optional()
@@ -50,6 +55,11 @@ const envSchema = z.object({
   SUPER_ADMIN_PASSWORD: optionalString,
   GOOGLE_CLIENT_ID: optionalString,
   ADMIN_GOOGLE_CLIENT_ID: optionalString,
+  DB_BACKUP_ENABLED: trueBooleanString,
+  DB_BACKUP_DIR: z.string().min(1).default("backups"),
+  DB_BACKUP_INTERVAL_MS: z.coerce.number().int().positive().default(24 * 60 * 60 * 1000),
+  DB_BACKUP_RETENTION_COUNT: z.coerce.number().int().positive().default(5),
+  DB_BACKUP_DUMP_BINARY: z.string().min(1).default("mysqldump"),
 
   CORS_ORIGINS: z
     .string()

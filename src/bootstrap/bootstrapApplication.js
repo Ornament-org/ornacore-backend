@@ -2,6 +2,7 @@ import db from "../database/models/InitializeModels.js";
 import { connectRedis } from "../config/redis.js";
 import { logger } from "../config/logger.js";
 import { featureFlagService } from "../modules/feature-flags/feature-flag.service.js";
+import { startDatabaseBackupScheduler } from "../modules/maintenance/database-backup.scheduler.js";
 import { startMetalRateSyncScheduler } from "../modules/metal-rates/metal-rate-sync.scheduler.js";
 
 export const bootstrapApplication = async () => {
@@ -23,6 +24,7 @@ export const bootstrapApplication = async () => {
   // Seed default feature flags (idempotent — safe to run on every startup)
   await featureFlagService.seedDefaults(logger);
   startMetalRateSyncScheduler();
+  startDatabaseBackupScheduler();
 
   return db;
 };

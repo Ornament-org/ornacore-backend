@@ -9,7 +9,7 @@ const senderAddress = () => {
 };
 
 export const nodemailerProvider = {
-  async send({ to, subject, html, text, fromName }) {
+  async send({ to, subject, html, text, fromName, attachments }) {
     if (!isMailerConfigured) {
       throw new AppError("Email provider is not configured", {
         statusCode: 503,
@@ -26,6 +26,7 @@ export const nodemailerProvider = {
       subject,
       html,
       text,
+      attachments,
     });
   },
 };

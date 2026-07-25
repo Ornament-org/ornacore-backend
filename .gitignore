@@ -5,6 +5,7 @@ node_modules/
 coverage/
 logs/
 uploads/
+backups/
 tmp/
 *.log
 .DS_Store
