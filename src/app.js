@@ -60,7 +60,7 @@ export const createApp = () => {
   app.get("/", (req, res) => {
     try {
       res.json({
-        message: `Welcome to the ${env.DB_NAME} backend of OrnaMent`
+        message: `Welcome to the db ${env.DB_NAME} in ${env.NODE_ENV} backend of OrnaMent`
       });
     } catch (error) {
       console.error("Error in home route:", error);
