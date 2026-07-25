@@ -42,7 +42,7 @@ RUN npm ci --omit=dev \
 COPY --chown=node:node . .
 
 RUN mkdir -p uploads backups tmp temp \
-  && chown -R node:node /app
+  && chown -R node:node uploads backups tmp temp
 
 USER node
 
