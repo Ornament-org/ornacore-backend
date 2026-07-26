@@ -2,6 +2,7 @@ import { createWriteStream } from "node:fs";
 import { mkdir, readdir, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
+import { setImmediate } from "node:timers";
 import { createGzip } from "node:zlib";
 import { spawn } from "node:child_process";
 import { env } from "../../config/env.js";
@@ -26,6 +27,16 @@ const resolveBackupDir = () => path.resolve(process.cwd(), env.DB_BACKUP_DIR);
 const createBackupFilePath = () =>
   path.join(resolveBackupDir(), `${backupFilePrefix}-${env.DB_NAME}-${timestampForFile()}.sql.gz`);
 
+const cancelledBackupError = () =>
+  new AppError("Database backup was cancelled", {
+    statusCode: 499,
+    code: "DATABASE_BACKUP_CANCELLED",
+  });
+
+const throwIfCancelled = (signal) => {
+  if (signal?.aborted) throw cancelledBackupError();
+};
+
 const createDumpArgs = () => [
   "--host",
   env.DB_HOST,
@@ -43,7 +54,9 @@ const createDumpArgs = () => [
   env.DB_NAME,
 ];
 
-const runDumpToFile = async (filePath) => {
+const runDumpToFile = async (filePath, { signal, onProcess } = {}) => {
+  throwIfCancelled(signal);
+
   const dump = spawn(env.DB_BACKUP_DUMP_BINARY, createDumpArgs(), {
     env: {
       ...process.env,
@@ -51,6 +64,7 @@ const runDumpToFile = async (filePath) => {
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
+  onProcess?.(dump);
 
   let stderr = "";
   dump.stderr.setEncoding("utf8");
@@ -58,9 +72,21 @@ const runDumpToFile = async (filePath) => {
     stderr += chunk;
   });
 
+  const abortDump = () => {
+    dump.stdout.destroy(cancelledBackupError());
+    dump.kill("SIGTERM");
+  };
+
+  signal?.addEventListener("abort", abortDump, { once: true });
+
   const exitPromise = new Promise((resolve, reject) => {
     dump.on("error", reject);
     dump.on("close", (code) => {
+      signal?.removeEventListener("abort", abortDump);
+      if (signal?.aborted) {
+        reject(cancelledBackupError());
+        return;
+      }
       if (code === 0) {
         resolve();
         return;
@@ -75,7 +101,12 @@ const runDumpToFile = async (filePath) => {
     });
   });
 
-  await Promise.all([pipeline(dump.stdout, createGzip(), createWriteStream(filePath)), exitPromise]);
+  try {
+    await Promise.all([pipeline(dump.stdout, createGzip(), createWriteStream(filePath)), exitPromise]);
+  } finally {
+    signal?.removeEventListener("abort", abortDump);
+    onProcess?.(null);
+  }
 };
 
 const listBackupFiles = async () => {
@@ -105,9 +136,9 @@ const pruneOldBackups = async () => {
   return oldFiles;
 };
 
-const emailBackup = async ({ filePath, fileName }) => {
-  if (!env.SUPER_ADMIN_EMAIL) {
-    throw new AppError("SUPER_ADMIN_EMAIL is required to email database backups", {
+const emailBackup = async ({ filePath, fileName, recipientEmail = env.SUPER_ADMIN_EMAIL }) => {
+  if (!recipientEmail) {
+    throw new AppError("A backup recipient email is required", {
       statusCode: 503,
       code: "DATABASE_BACKUP_RECIPIENT_NOT_CONFIGURED",
     });
@@ -122,7 +153,7 @@ const emailBackup = async ({ filePath, fileName }) => {
   | mysql -h ${env.DB_HOST} -P ${env.DB_PORT} -u ${env.DB_USER} -p`;
 
   return nodemailerProvider.send({
-    to: env.SUPER_ADMIN_EMAIL,
+    to: recipientEmail,
     subject: `OrnaCore database backup - ${env.DB_NAME}`,
     text: [
       `Database backup for ${env.DB_NAME} is attached.`,
@@ -169,8 +200,25 @@ const emailBackup = async ({ filePath, fileName }) => {
   });
 };
 
+const sendBackupEmail = async ({ filePath, fileName, recipientEmail }) => {
+  logger.info("Database backup email started", { fileName, recipientEmail });
+  const emailResult = await emailBackup({ filePath, fileName, recipientEmail });
+  logger.info("Database backup email sent", { fileName, recipientEmail });
+  return emailResult;
+};
+
+const queueBackupEmail = ({ filePath, fileName, recipientEmail }) => {
+  setImmediate(() => {
+    sendBackupEmail({ filePath, fileName, recipientEmail }).catch((error) => {
+      logger.error("Database backup email failed", { fileName, recipientEmail, error });
+    });
+  });
+};
+
 export const databaseBackupService = {
-  async createBackup({ email = true } = {}) {
+  sendBackupEmail,
+
+  async createBackup({ email = true, recipientEmail, emailMode = "sync", signal, onDumpProcess } = {}) {
     const backupDir = resolveBackupDir();
     await mkdir(backupDir, { recursive: true });
 
@@ -178,20 +226,35 @@ export const databaseBackupService = {
     const fileName = path.basename(filePath);
 
     logger.info("Database backup started", { database: env.DB_NAME, fileName });
-    await runDumpToFile(filePath);
+    try {
+      await runDumpToFile(filePath, { signal, onProcess: onDumpProcess });
+      throwIfCancelled(signal);
+    } catch (error) {
+      if (signal?.aborted || error.code === "DATABASE_BACKUP_CANCELLED") {
+        await unlink(filePath).catch(() => {});
+      }
+      throw error;
+    }
 
     const fileStat = await stat(filePath);
     const pruned = await pruneOldBackups();
 
     let emailResult = null;
+    let emailQueued = false;
     if (email) {
-      emailResult = await emailBackup({ filePath, fileName });
+      if (emailMode === "background") {
+        queueBackupEmail({ filePath, fileName, recipientEmail });
+        emailQueued = true;
+      } else {
+        emailResult = await sendBackupEmail({ filePath, fileName, recipientEmail });
+      }
     }
 
     logger.info("Database backup completed", {
       fileName,
       sizeBytes: fileStat.size,
       emailed: Boolean(emailResult),
+      emailQueued,
       pruned: pruned.map((file) => file.fileName),
     });
 
@@ -200,6 +263,8 @@ export const databaseBackupService = {
       filePath,
       sizeBytes: fileStat.size,
       emailed: Boolean(emailResult),
+      emailQueued,
+      recipientEmail: emailResult || emailQueued ? (recipientEmail ?? env.SUPER_ADMIN_EMAIL) : null,
       pruned: pruned.map((file) => file.fileName),
     };
   },

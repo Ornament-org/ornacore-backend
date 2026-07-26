@@ -30,6 +30,7 @@ import { storeSettingsAdminRouter } from "../modules/settings/store-settings.rou
 import { collectionAdminRouter } from "../modules/collections/collection.routes.js";
 import { bannerAdminRouter } from "../modules/banners/banner.routes.js";
 import { bannerPlaceholderAdminRouter } from "../modules/banners/banner-placeholder.routes.js";
+import { databaseBackupAdminRouter } from "../modules/maintenance/database-backup.routes.js";
 
 const router = Router();
 
@@ -64,5 +65,6 @@ router.use("/store-settings", storeSettingsAdminRouter);
 router.use("/collections", collectionAdminRouter);
 router.use("/banners", bannerAdminRouter);
 router.use("/banner-placeholders", bannerPlaceholderAdminRouter);
+router.use("/maintenance", databaseBackupAdminRouter);
 
 export default router;
