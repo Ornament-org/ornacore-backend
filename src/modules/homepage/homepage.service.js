@@ -53,6 +53,11 @@ const findActiveConfig = async (where) =>
     ],
   });
 
+const defaultSectionConfig = (sectionType) => {
+  if (sectionType === "COLLECTIONS") return { collectionIds: [] };
+  return {};
+};
+
 export const homepageService = {
   // Reads the live sections directly — there is no draft/publish/version-snapshot
   // layer, whatever an admin saves is what the storefront serves on the next request.
@@ -211,7 +216,7 @@ export const homepageService = {
           sectionKey,
           title: payload.title ?? null,
           subtitle: payload.subtitle ?? null,
-          configJson: payload.config ?? {},
+          configJson: payload.config ?? defaultSectionConfig(payload.sectionType),
           sortOrder: Number.isFinite(maxSort) ? maxSort + 1 : 0,
           isActive: payload.isActive ?? true,
         },

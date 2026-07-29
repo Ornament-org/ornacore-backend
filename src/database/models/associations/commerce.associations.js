@@ -71,10 +71,15 @@ export default function commerceAssociations(db) {
   });
   db.Order.hasMany(db.OrderItem, { foreignKey: "orderId", as: "items" });
   db.OrderItem.belongsTo(db.Order, { foreignKey: "orderId", as: "order" });
-  db.OrderItem.belongsTo(db.Product, { foreignKey: "productId", as: "product" });
+  db.OrderItem.belongsTo(db.Product, {
+    foreignKey: "productId",
+    as: "product",
+    onDelete: "SET NULL",
+  });
   db.OrderItem.belongsTo(db.ProductVariant, {
     foreignKey: "productVariantId",
     as: "variant",
+    onDelete: "SET NULL",
   });
   db.Order.hasMany(db.OrderStatusHistory, { foreignKey: "orderId", as: "statusHistory" });
   db.OrderStatusHistory.belongsTo(db.Order, { foreignKey: "orderId", as: "order" });

@@ -13,10 +13,11 @@ const OrderItem = sequelize.define(
   {
     id: bigIntId,
     orderId: foreignBigInt(),
-    productId: foreignBigInt(),
-    productVariantId: foreignBigInt(),
+    productId: foreignBigInt({ allowNull: true }),
+    productVariantId: foreignBigInt({ allowNull: true }),
     productNameSnapshot: { type: DataTypes.STRING(191), allowNull: false },
     skuSnapshot: { type: DataTypes.STRING(100), allowNull: false },
+    imageUrlSnapshot: { type: DataTypes.TEXT, allowNull: true },
     quantity: quantity(),
     unitPrice: money(),
     lineSubtotal: money(),

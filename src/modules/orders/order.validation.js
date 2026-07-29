@@ -38,6 +38,17 @@ export const assignSchema = z.object({
   query: z.object({}).passthrough(),
 });
 
+export const cancelRequestedOrderSchema = z.object({
+  body: z
+    .object({
+      note: z.string().trim().max(500).nullable().optional(),
+    })
+    .optional()
+    .default({}),
+  params: z.object({ id: z.coerce.number().int().positive() }),
+  query: z.object({}).passthrough(),
+});
+
 export const shopkeeperPlaceOrderSchema = z.object({
   body: z.object({
     notes: z.string().trim().max(5000).nullable().optional(),

@@ -10,6 +10,7 @@ import { idParamSchema, listQuerySchema } from "../../shared/http/crud.validatio
 import { createModuleRouter } from "../module.router.js";
 import { orderController } from "./order.controller.js";
 import {
+  cancelRequestedOrderSchema,
   createOrderSchema,
   statusSchema,
   assignSchema,
@@ -70,6 +71,12 @@ orderShopkeeperRouter.get(
   "/:id",
   validate(idParamSchema),
   asyncHandler(orderController.shopkeeperGetById),
+);
+
+orderShopkeeperRouter.post(
+  "/:id/cancel",
+  validate(cancelRequestedOrderSchema),
+  asyncHandler(orderController.shopkeeperCancelRequested),
 );
 
 orderShopkeeperRouter.post(

@@ -30,7 +30,7 @@ export const DEFAULT_HOMEPAGES = {
     title: "Default B2B Homepage",
     sections: [
       section("BANNERS"),
-      section("COLLECTIONS", { title: "Our Collections" }),
+      section("COLLECTIONS", { title: "Our Collections", config: { collectionIds: [] } }),
       section("QUICK_CATEGORIES", { title: "Shop by Category", config: { maxItems: 16 } }),
       section("TRENDING_PRODUCTS", { title: "Top Picks for Your Business", config: { limit: 6 } }),
       section("TRUST_SECTION", { title: "Why Partner With Us?" }),
@@ -43,7 +43,7 @@ export const DEFAULT_HOMEPAGES = {
     title: "Default B2C Homepage",
     sections: [
       section("BANNERS"),
-      section("COLLECTIONS", { title: "Our Collections" }),
+      section("COLLECTIONS", { title: "Our Collections", config: { collectionIds: [] } }),
       section("QUICK_CATEGORIES", { title: "Shop by Category", config: { maxItems: 16 } }),
       section("TRUST_SECTION", { title: "Why Partner With Us?" }),
     ],

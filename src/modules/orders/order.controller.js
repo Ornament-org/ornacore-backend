@@ -20,6 +20,25 @@ const priceOrUnpriced = async (params) => {
   }
 };
 
+const productWithImagesInclude = {
+  model: db.Product,
+  as: "product",
+  include: [
+    { model: db.Metal, as: "metal" },
+    {
+      model: db.ProductImage,
+      as: "images",
+      required: false,
+      include: [{ model: db.Media, as: "media", required: false }],
+    },
+  ],
+};
+
+const primaryProductImageUrl = (product) =>
+  product?.images?.find((image) => image.isPrimary)?.media?.secureUrl
+  ?? product?.images?.[0]?.media?.secureUrl
+  ?? null;
+
 export const orderInclude = [
   {
     model: db.ShopkeeperProfile,
@@ -36,19 +55,7 @@ export const orderInclude = [
     model: db.OrderItem,
     as: "items",
     include: [
-      {
-        model: db.Product,
-        as: "product",
-        include: [
-          { model: db.Metal, as: "metal" },
-          {
-            model: db.ProductImage,
-            as: "images",
-            required: false,
-            include: [{ model: db.Media, as: "media", required: false }],
-          },
-        ],
-      },
+      productWithImagesInclude,
       { model: db.ProductVariant, as: "variant" },
     ],
   },
@@ -72,9 +79,9 @@ export const orderInclude = [
 
 const transitions = {
   REQUESTED: ["PRICE_CONFIRMED", "CONFIRMED", "CANCELLED"],
-  PRICE_CONFIRMED: ["CONFIRMED", "CANCELLED"],
-  CONFIRMED: ["PACKED", "CANCELLED"],
-  PACKED: ["DISPATCHED", "CANCELLED"],
+  PRICE_CONFIRMED: ["CONFIRMED"],
+  CONFIRMED: ["PACKED"],
+  PACKED: ["DISPATCHED"],
   DISPATCHED: ["DELIVERED"],
   DELIVERED: [],
   CANCELLED: [],
@@ -274,7 +281,7 @@ const adminCreate = async (request, response) => {
 
       for (const inputItem of input.items) {
         const variant = await db.ProductVariant.findByPk(inputItem.productVariantId, {
-          include: [{ model: db.Product, as: "product" }],
+          include: [productWithImagesInclude],
           transaction,
         });
         if (!variant || !variant.isActive || variant.product.status !== "ACTIVE") {
@@ -302,6 +309,7 @@ const adminCreate = async (request, response) => {
           productVariantId: variant.id,
           productNameSnapshot: variant.product.name,
           skuSnapshot: variant.sku,
+          imageUrlSnapshot: primaryProductImageUrl(variant.product),
           quantity: new Decimal(inputItem.quantity).toFixed(3),
           unitPrice: price.unitPrice.toFixed(4),
           lineSubtotal: lineTotal.toFixed(4),
@@ -367,7 +375,7 @@ const adminCreate = async (request, response) => {
 /*
   PATCH /admin/orders/:id/status
   { "status": "CONFIRMED", "note": "Payment verified" }
-  Transitions: REQUESTED → PRICE_CONFIRMED/CONFIRMED/CANCELLED | CONFIRMED → PACKED/CANCELLED | PACKED → DISPATCHED/CANCELLED | DISPATCHED → DELIVERED
+  Transitions: REQUESTED → PRICE_CONFIRMED/CONFIRMED/CANCELLED | PRICE_CONFIRMED → CONFIRMED | CONFIRMED → PACKED | PACKED → DISPATCHED | DISPATCHED → DELIVERED
 */
 const adminUpdateStatus = async (request, response) => {
   try {
@@ -572,6 +580,78 @@ const shopkeeperGetById = async (request, response) => {
   }
 };
 
+const shopkeeperCancelRequested = async (request, response) => {
+  try {
+    const result = await db.sequelize.transaction(async (transaction) => {
+      const order = await db.Order.findOne({
+        where: {
+          id: request.validated.params.id,
+          shopkeeperId: request.shopkeeper.id,
+        },
+        include: orderInclude,
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      if (!order) {
+        throw new AppError("Order not found", {
+          statusCode: 404,
+          code: "ORDER_NOT_FOUND",
+        });
+      }
+      if (order.status !== ORDER_STATUSES.REQUESTED) {
+        throw new AppError("Only requested orders can be cancelled by the shopkeeper", {
+          statusCode: 409,
+          code: "ORDER_CANCEL_NOT_ALLOWED",
+        });
+      }
+
+      const note = request.validated.body?.note || "Cancelled by shopkeeper";
+      await order.update(
+        {
+          status: ORDER_STATUSES.CANCELLED,
+          cancelledAt: new Date(),
+        },
+        { transaction },
+      );
+      await db.OrderStatusHistory.create(
+        {
+          orderId: order.id,
+          fromStatus: ORDER_STATUSES.REQUESTED,
+          toStatus: ORDER_STATUSES.CANCELLED,
+          note,
+          changedByUserId: request.auth.sub,
+        },
+        { transaction },
+      );
+      await auditLogService.record({
+        request,
+        action: "CANCEL_REQUESTED",
+        module: "orders",
+        entityType: "Order",
+        entityId: order.id,
+        oldValue: { status: ORDER_STATUSES.REQUESTED },
+        newValue: { status: ORDER_STATUSES.CANCELLED, note },
+        transaction,
+      });
+      return order;
+    });
+
+    response.json(
+      ApiResponse.success({
+        message: "Order cancelled successfully",
+        data: await getOrder(result.id),
+      }),
+    );
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
 /*
   POST /shopkeeper/orders
   { "notes": "Please wrap carefully" }
@@ -591,7 +671,7 @@ const shopkeeperCreate = async (request, response) => {
                 model: db.ProductVariant,
                 as: "variant",
                 include: [
-                  { model: db.Product, as: "product" },
+                  productWithImagesInclude,
                   { model: db.Inventory, as: "inventory", required: false },
                 ],
               },
@@ -642,6 +722,7 @@ const shopkeeperCreate = async (request, response) => {
           productVariantId: variant.id,
           productNameSnapshot: variant.product.name,
           skuSnapshot: variant.sku,
+          imageUrlSnapshot: primaryProductImageUrl(variant.product),
           quantity: cartItem.quantity,
           unitPrice: price.unitPrice.toFixed(4),
           lineSubtotal: lineTotal.toFixed(4),
@@ -712,5 +793,6 @@ export const orderController = {
   adminAssign,
   shopkeeperList,
   shopkeeperGetById,
+  shopkeeperCancelRequested,
   shopkeeperCreate,
 };

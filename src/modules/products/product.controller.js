@@ -43,6 +43,42 @@ const buildSlugSeed = (name, designCode) => {
   return designCode ? base : `${base}-${Date.now().toString(36)}`;
 };
 
+const SKU_MAX_LENGTH = 100;
+
+const skuKey = (sku) => String(sku).trim().toLowerCase();
+
+const skuWithSuffix = (baseSku, suffix) => {
+  if (suffix === 1) return baseSku.slice(0, SKU_MAX_LENGTH);
+  const suffixText = `-${suffix}`;
+  return `${baseSku.slice(0, SKU_MAX_LENGTH - suffixText.length)}${suffixText}`;
+};
+
+const nextAvailableSku = async (
+  requestedSku,
+  { excludeVariantId, reservedSkus = new Set(), transaction } = {},
+) => {
+  const baseSku = String(requestedSku).trim();
+  for (let suffix = 1; suffix <= 9999; suffix += 1) {
+    const candidate = skuWithSuffix(baseSku, suffix);
+    if (reservedSkus.has(skuKey(candidate))) continue;
+
+    const existing = await db.ProductVariant.count({
+      where: {
+        sku: candidate,
+        ...(excludeVariantId ? { id: { [Op.ne]: excludeVariantId } } : {}),
+      },
+      transaction,
+    });
+    if (!existing) return candidate;
+  }
+
+  throw new AppError("Unable to generate a unique SKU", {
+    statusCode: 409,
+    code: "PRODUCT_SKU_UNAVAILABLE",
+    details: { field: "sku", sku: requestedSku },
+  });
+};
+
 const assertMetalExists = async (metalId, transaction) => {
   const exists = await db.Metal.count({ where: { id: metalId, isActive: true }, transaction });
   if (!exists) {
@@ -121,12 +157,15 @@ const replaceCategoryMappings = async ({ productId, mappings, metalId, transacti
   );
 };
 
-const createVariantRecords = async ({ product, variants, request, transaction }) => {
+const createVariantRecords = async ({ product, variants, request, transaction, reservedSkus }) => {
   for (const variantInput of variants) {
+    const sku = await nextAvailableSku(variantInput.sku, { reservedSkus, transaction });
+    reservedSkus?.add(skuKey(sku));
+
     const variant = await db.ProductVariant.create(
       {
         productId: product.id,
-        sku: variantInput.sku,
+        sku,
         name: variantInput.name ?? null,
         purity: variantInput.purity ?? null,
         karat: variantInput.karat ?? null,
@@ -187,6 +226,61 @@ const createVariantRecords = async ({ product, variants, request, transaction })
       );
     }
   }
+};
+
+const deleteProductPreservingOrderSnapshots = async ({ product, request, transaction }) => {
+  const variants = await db.ProductVariant.findAll({
+    attributes: ["id"],
+    where: { productId: product.id },
+    transaction,
+  });
+  const variantIds = variants.map((variant) => variant.id);
+
+  await db.OrderItem.update(
+    { productId: null, productVariantId: null },
+    { where: { productId: product.id }, transaction },
+  );
+
+  if (variantIds.length) {
+    const inventories = await db.Inventory.findAll({
+      attributes: ["id"],
+      where: { productVariantId: variantIds },
+      transaction,
+    });
+    const inventoryIds = inventories.map((inventory) => inventory.id);
+
+    await db.OrderItem.update(
+      { productVariantId: null },
+      { where: { productVariantId: variantIds }, transaction },
+    );
+    await db.CartItem.destroy({ where: { productVariantId: variantIds }, transaction });
+    await db.ProductVariantAttribute.destroy({ where: { variantId: variantIds }, transaction });
+    await db.ShopkeeperPriceOverride.destroy({
+      where: { productVariantId: variantIds },
+      transaction,
+    });
+    if (inventoryIds.length) {
+      await db.InventoryMovement.destroy({ where: { inventoryId: inventoryIds }, transaction });
+    }
+    await db.Inventory.destroy({ where: { productVariantId: variantIds }, transaction });
+    await db.ProductVariant.destroy({ where: { id: variantIds }, transaction });
+  }
+
+  await db.CollectionProduct.destroy({ where: { productId: product.id }, transaction });
+  await db.PricingRule.destroy({ where: { productId: product.id }, transaction });
+  await db.ProductImage.destroy({ where: { productId: product.id }, transaction });
+  await db.ProductCategoryMapping.destroy({ where: { productId: product.id }, transaction });
+
+  await auditLogService.record({
+    request,
+    action: "DELETE",
+    module: "products",
+    entityType: "Product",
+    entityId: product.id,
+    oldValue: product.toJSON(),
+    transaction,
+  });
+  await product.destroy({ transaction });
 };
 
 const adminList = async (request, response, next) => {
@@ -302,7 +396,13 @@ const adminCreate = async (request, response, next) => {
         metalId: payload.metalId,
         transaction,
       });
-      await createVariantRecords({ product: created, variants, request, transaction });
+      await createVariantRecords({
+        product: created,
+        variants,
+        request,
+        transaction,
+        reservedSkus: new Set(),
+      });
       await auditLogService.record({
         request,
         action: "CREATE",
@@ -391,6 +491,7 @@ const adminUpdate = async (request, response, next) => {
         });
       }
       if (variants) {
+        const reservedSkus = new Set();
         for (const variantInput of variants) {
           if (variantInput.id) {
             const variant = await db.ProductVariant.findOne({
@@ -403,9 +504,15 @@ const adminUpdate = async (request, response, next) => {
                 code: "VARIANT_NOT_FOUND",
               });
             }
+            const sku = await nextAvailableSku(variantInput.sku, {
+              excludeVariantId: variant.id,
+              reservedSkus,
+              transaction,
+            });
+            reservedSkus.add(skuKey(sku));
             await variant.update(
               {
-                sku: variantInput.sku,
+                sku,
                 name: variantInput.name ?? null,
                 purity: variantInput.purity ?? null,
                 karat: variantInput.karat ?? null,
@@ -430,6 +537,7 @@ const adminUpdate = async (request, response, next) => {
               variants: [variantInput],
               request,
               transaction,
+              reservedSkus,
             });
           }
         }
@@ -460,27 +568,8 @@ const adminDelete = async (request, response, next) => {
       });
     }
 
-    const orderItemCount = await db.OrderItem.count({
-      where: { productId: product.id },
-    });
-    if (orderItemCount > 0) {
-      throw new AppError("Cannot delete product because it is referenced in existing orders", {
-        statusCode: 400,
-        code: "PRODUCT_HAS_ORDERS",
-      });
-    }
-
     await db.sequelize.transaction(async (transaction) => {
-      await auditLogService.record({
-        request,
-        action: "DELETE",
-        module: "products",
-        entityType: "Product",
-        entityId: product.id,
-        oldValue: product.toJSON(),
-        transaction,
-      });
-      await product.destroy({ transaction });
+      await deleteProductPreservingOrderSnapshots({ product, request, transaction });
     });
 
     response.json(ApiResponse.success({ message: "Product deleted successfully" }));
@@ -492,10 +581,9 @@ const adminDelete = async (request, response, next) => {
 /*
   DELETE /admin/products/bulk
   { "ids": [1, 2, 3] }
-  Same has-existing-orders guard as adminDelete, applied per id — a product
-  referenced in orders is skipped rather than failing the whole batch, so
-  the caller always gets back exactly which ids were deleted vs skipped
-  (and why) instead of an all-or-nothing 400.
+  Deletes products even when historical orders reference them. Order items keep
+  productNameSnapshot / skuSnapshot / pricingSnapshot and their live product
+  references are detached during deletion.
 */
 const adminBulkDelete = async (request, response, next) => {
   try {
@@ -507,23 +595,8 @@ const adminBulkDelete = async (request, response, next) => {
     const skipped = [];
 
     for (const product of products) {
-      const orderItemCount = await db.OrderItem.count({ where: { productId: product.id } });
-      if (orderItemCount > 0) {
-        skipped.push({ id: product.id, name: product.name, reason: "Referenced in existing orders" });
-        continue;
-      }
-
       await db.sequelize.transaction(async (transaction) => {
-        await auditLogService.record({
-          request,
-          action: "DELETE",
-          module: "products",
-          entityType: "Product",
-          entityId: product.id,
-          oldValue: product.toJSON(),
-          transaction,
-        });
-        await product.destroy({ transaction });
+        await deleteProductPreservingOrderSnapshots({ product, request, transaction });
       });
       deletedIds.push(product.id);
     }
