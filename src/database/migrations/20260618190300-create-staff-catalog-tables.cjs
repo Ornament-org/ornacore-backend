@@ -20,6 +20,15 @@ const foreignId = (Sequelize, model, { allowNull = false, onDelete = "RESTRICT" 
   onDelete,
 });
 
+const hasIndex = async (queryInterface, tableName, indexName) =>
+  (await queryInterface.showIndex(tableName)).some((index) => index.name === indexName);
+
+const addIndexIfMissing = async (queryInterface, tableName, fields, options) => {
+  if (!(await hasIndex(queryInterface, tableName, options.name))) {
+    await queryInterface.addIndex(tableName, fields, options);
+  }
+};
+
 /** @type {import("sequelize-cli").Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
@@ -168,7 +177,7 @@ module.exports = {
       display_order: { type: Sequelize.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0 },
       ...timestamps(Sequelize),
     });
-    await queryInterface.addIndex("product_images", ["product_id", "media_id"], {
+    await addIndexIfMissing(queryInterface, "product_images", ["product_id", "media_id"], {
       unique: true,
       name: "product_images_product_media_uq",
     });
