@@ -666,19 +666,24 @@ const adminAddImages = async (request, response, next) => {
         );
       }
 
-      // (product_id, media_id) is unique — the same media can't be attached
-      // to a product twice. Re-selecting an already-attached image (e.g. to
-      // mark it primary) updates that existing row instead of failing the
-      // whole batch on the DB's unique-constraint error.
+      const imageScopeKey = (image) => {
+        const target = image.productVariantId ? `variant:${image.productVariantId}` : "product";
+        return `${target}:${image.mediaId}`;
+      };
+
+      // The same media can be used in the product gallery and in variants,
+      // but re-selecting it within the same gallery/variant should update
+      // the existing row instead of creating a duplicate.
       const existingRows = await db.ProductImage.findAll({
         where: { productId: product.id, mediaId: payload.map((image) => image.mediaId) },
         transaction,
       });
-      const existingByMedia = new Map(existingRows.map((row) => [String(row.mediaId), row]));
+      const existingByScope = new Map(existingRows.map((row) => [imageScopeKey(row), row]));
 
       const created = [];
       for (const [index, image] of payload.entries()) {
-        const existingRow = existingByMedia.get(String(image.mediaId));
+        const scopeKey = imageScopeKey(image);
+        const existingRow = existingByScope.get(scopeKey);
         if (existingRow) {
           skippedCount += 1;
           await existingRow.update(
@@ -686,7 +691,6 @@ const adminAddImages = async (request, response, next) => {
               isPrimary: image.isPrimary ?? existingRow.isPrimary,
               altText: image.altText ?? existingRow.altText,
               displayOrder: image.displayOrder ?? existingRow.displayOrder,
-              productVariantId: image.productVariantId ?? existingRow.productVariantId,
             },
             { transaction },
           );
@@ -704,18 +708,19 @@ const adminAddImages = async (request, response, next) => {
           { transaction },
         );
         created.push(row);
+        existingByScope.set(scopeKey, row);
       }
       return created;
     });
 
     const skippedNote = skippedCount
-      ? ` (${skippedCount} already attached — updated instead)`
+      ? ` (${skippedCount} already attached in the same place — updated instead)`
       : "";
     response.status(images.length ? 201 : 200).json(
       ApiResponse.success({
         message: images.length
           ? `${images.length} product image${images.length === 1 ? "" : "s"} added successfully${skippedNote}`
-          : `No new images added — all selected images were already attached to this product${skippedNote ? ", details updated" : ""}.`,
+          : `No new images added — all selected images were already attached in the same place${skippedNote ? ", details updated" : ""}.`,
         data: images,
       }),
     );

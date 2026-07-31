@@ -15,7 +15,10 @@ const ProductImage = sequelize.define(
   },
   {
     ...modelOptions("product_images", {
-      indexes: [{ unique: true, fields: ["product_id", "media_id"] }],
+      indexes: [
+        { fields: ["product_id", "media_id"] },
+        { fields: ["product_id", "product_variant_id", "media_id"] },
+      ],
     }),
   },
 );
