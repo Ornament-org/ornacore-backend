@@ -24,8 +24,8 @@ import { metalPublicRouter } from "./modules/metals/metal.routes.js";
 import { bannerPublicRouter } from "./modules/banners/banner.routes.js";
 
 const defaultCorsOrigins = [
-  "https://wolfan.jipanditji.com",
-  "https://tool.wolfan.jipanditji.com",
+  "https://orna.vedantaa.in",
+  "https://tool.orna.vedantaa.in",
 ];
 
 const normalizeOrigin = (origin) => {
