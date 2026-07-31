@@ -4,9 +4,11 @@ import db from "../../database/models/InitializeModels.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
 import { slugify } from "../../shared/utils/slugify.js";
+import { logger } from "../../config/logger.js";
 import { attributeService } from "../attributes/attribute.service.js";
 import { auditLogService } from "../audit-logs/audit-log.service.js";
 import { pricingService } from "../pricing/pricing.service.js";
+import { repairProductImageMediaIndexes } from "./product-image-index.repair.js";
 
 export const productInclude = [
   { model: db.Metal, as: "metal" },
@@ -672,6 +674,7 @@ const adminAddImages = async (request, response, next) => {
         code: "PRODUCT_NOT_FOUND",
       });
     }
+    await repairProductImageMediaIndexes(db, logger);
     let skippedCount = 0;
     const images = await db.sequelize.transaction(async (transaction) => {
       const payload = request.validated.body.images;
