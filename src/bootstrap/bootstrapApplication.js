@@ -5,6 +5,7 @@ import { env } from "../config/env.js";
 import { featureFlagService } from "../modules/feature-flags/feature-flag.service.js";
 import { startDatabaseBackupScheduler } from "../modules/maintenance/database-backup.scheduler.js";
 import { startMetalRateSyncScheduler } from "../modules/metal-rates/metal-rate-sync.scheduler.js";
+import { repairProductImageMediaIndexes } from "../modules/products/product-image-index.repair.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -49,6 +50,14 @@ const connectMysql = async () => {
 
 export const bootstrapApplication = async () => {
   await connectMysql();
+  try {
+    await repairProductImageMediaIndexes(db, logger);
+  } catch (error) {
+    logger.error("Failed to repair product image media indexes", {
+      code: error?.parent?.code ?? error?.original?.code ?? error?.code,
+      message: error?.message,
+    });
+  }
 
   const redis = await connectRedis();
   if (redis) {
