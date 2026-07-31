@@ -47,6 +47,7 @@ const buildSlugSeed = (name, designCode) => {
 
 const PRODUCT_SLUG_MAX_LENGTH = 220;
 const SKU_MAX_LENGTH = 100;
+const MEDIA_ALIAS_OWNER_TYPE = "ProductImageAlias";
 
 const slugWithSuffix = (baseSlug, suffix) => {
   if (suffix === 1) return baseSlug.slice(0, PRODUCT_SLUG_MAX_LENGTH);
@@ -115,6 +116,39 @@ const nextAvailableSku = async (
     details: { field: "sku", sku: requestedSku },
   });
 };
+
+const mediaAliasPublicId = (publicId, productId) => {
+  const suffix = `--reuse-${productId}-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+  return `${String(publicId).slice(0, 255 - suffix.length)}${suffix}`;
+};
+
+const cloneMediaForProductImage = async ({ media, product, request, transaction }) =>
+  db.Media.create(
+    {
+      publicId: mediaAliasPublicId(media.publicId, product.id),
+      secureUrl: media.secureUrl,
+      resourceType: media.resourceType,
+      folder: media.folder,
+      originalFilename: media.originalFilename,
+      mimeType: media.mimeType,
+      sizeBytes: media.sizeBytes,
+      width: media.width,
+      height: media.height,
+      uploadedByUserId: request.auth?.sub ?? media.uploadedByUserId,
+      ownerType: MEDIA_ALIAS_OWNER_TYPE,
+      ownerId: product.id,
+      folderId: media.folderId,
+      altText: media.altText,
+      metadata: {
+        ...(media.metadata && typeof media.metadata === "object" ? media.metadata : {}),
+        aliasOfMediaId: media.id,
+        aliasReason: "product-image-reuse",
+      },
+    },
+    { transaction },
+  );
 
 const assertMetalExists = async (metalId, transaction) => {
   const exists = await db.Metal.count({ where: { id: metalId, isActive: true }, transaction });
@@ -674,10 +708,19 @@ const adminAddImages = async (request, response, next) => {
         code: "PRODUCT_NOT_FOUND",
       });
     }
-    await repairProductImageMediaIndexes(db, logger);
+    try {
+      await repairProductImageMediaIndexes(db, logger);
+    } catch (error) {
+      logger.warn("Product image index repair skipped before attach", {
+        productId: product.id,
+        code: error?.parent?.code ?? error?.original?.code ?? error?.code,
+        message: error?.message,
+      });
+    }
     let skippedCount = 0;
     const images = await db.sequelize.transaction(async (transaction) => {
       const payload = request.validated.body.images;
+      const mediaById = new Map();
 
       for (const image of payload) {
         const media = await db.Media.findByPk(image.mediaId, { transaction });
@@ -699,6 +742,7 @@ const adminAddImages = async (request, response, next) => {
             });
           }
         }
+        mediaById.set(String(image.mediaId), media);
       }
 
       if (payload.some((image) => image.isPrimary)) {
@@ -721,6 +765,7 @@ const adminAddImages = async (request, response, next) => {
         transaction,
       });
       const existingByScope = new Map(existingRows.map((row) => [imageScopeKey(row), row]));
+      const existingMediaIds = new Set(existingRows.map((row) => String(row.mediaId)));
 
       const created = [];
       for (const [index, image] of payload.entries()) {
@@ -738,11 +783,21 @@ const adminAddImages = async (request, response, next) => {
           );
           continue;
         }
+        let mediaId = image.mediaId;
+        if (existingMediaIds.has(String(image.mediaId))) {
+          const mediaAlias = await cloneMediaForProductImage({
+            media: mediaById.get(String(image.mediaId)),
+            product,
+            request,
+            transaction,
+          });
+          mediaId = mediaAlias.id;
+        }
         const row = await db.ProductImage.create(
           {
             productId: product.id,
             productVariantId: image.productVariantId ?? null,
-            mediaId: image.mediaId,
+            mediaId,
             altText: image.altText ?? product.name,
             isPrimary: image.isPrimary ?? index === 0,
             displayOrder: image.displayOrder ?? index,
@@ -751,6 +806,7 @@ const adminAddImages = async (request, response, next) => {
         );
         created.push(row);
         existingByScope.set(scopeKey, row);
+        existingMediaIds.add(String(mediaId));
       }
       return created;
     });

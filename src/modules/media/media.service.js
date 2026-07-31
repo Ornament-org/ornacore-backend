@@ -20,7 +20,16 @@ export const mediaService = {
     const pageNum = Math.max(Number(page) || 1, 1);
     const limitNum = Math.min(Math.max(Number(limit) || 24, 1), 100);
     const isTrashed = trashed === true || trashed === "true";
-    const where = {};
+    const where = {
+      [Op.and]: [
+        {
+          [Op.or]: [
+            { ownerType: null },
+            { ownerType: { [Op.ne]: "ProductImageAlias" } },
+          ],
+        },
+      ],
+    };
 
     if (isTrashed) where.deletedAt = { [Op.ne]: null };
     if (folderId !== undefined && folderId !== "" && folderId !== null) where.folderId = folderId;
