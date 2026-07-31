@@ -43,7 +43,42 @@ const buildSlugSeed = (name, designCode) => {
   return designCode ? base : `${base}-${Date.now().toString(36)}`;
 };
 
+const PRODUCT_SLUG_MAX_LENGTH = 220;
 const SKU_MAX_LENGTH = 100;
+
+const slugWithSuffix = (baseSlug, suffix) => {
+  if (suffix === 1) return baseSlug.slice(0, PRODUCT_SLUG_MAX_LENGTH);
+  const suffixText = `-${suffix}`;
+  return `${baseSlug.slice(0, PRODUCT_SLUG_MAX_LENGTH - suffixText.length)}${suffixText}`;
+};
+
+const nextAvailableProductSlug = async (
+  seed,
+  { excludeProductId, transaction } = {},
+) => {
+  const baseSlug = (slugify(seed) || "product").slice(0, PRODUCT_SLUG_MAX_LENGTH);
+  const existing = await db.Product.unscoped().findAll({
+    attributes: ["slug"],
+    where: {
+      slug: { [Op.like]: `${baseSlug}%` },
+      ...(excludeProductId ? { id: { [Op.ne]: excludeProductId } } : {}),
+    },
+    transaction,
+    raw: true,
+  });
+  const usedSlugs = new Set(existing.map(({ slug }) => slug));
+
+  for (let suffix = 1; suffix <= 9999; suffix += 1) {
+    const candidate = slugWithSuffix(baseSlug, suffix);
+    if (!usedSlugs.has(candidate)) return candidate;
+  }
+
+  throw new AppError("Unable to generate a unique product slug", {
+    statusCode: 409,
+    code: "PRODUCT_SLUG_UNAVAILABLE",
+    details: { field: "slug", slug: baseSlug },
+  });
+};
 
 const skuKey = (sku) => String(sku).trim().toLowerCase();
 
@@ -383,7 +418,10 @@ const adminCreate = async (request, response, next) => {
       const created = await db.Product.create(
         {
           ...payload,
-          slug: slugify(payload.slug || buildSlugSeed(payload.name, payload.designCode)),
+          slug: await nextAvailableProductSlug(
+            payload.slug || buildSlugSeed(payload.name, payload.designCode),
+            { transaction },
+          ),
           createdByUserId: request.auth.sub,
           updatedByUserId: request.auth.sub,
           publishedAt: payload.status === PRODUCT_STATUSES.ACTIVE ? new Date() : null,
@@ -469,9 +507,10 @@ const adminUpdate = async (request, response, next) => {
           ...payload,
           ...(payload.slug || payload.name || payload.designCode
             ? {
-                slug: slugify(
+                slug: await nextAvailableProductSlug(
                   payload.slug ||
                     buildSlugSeed(payload.name ?? product.name, payload.designCode ?? product.designCode),
+                  { excludeProductId: product.id, transaction },
                 ),
               }
             : {}),
