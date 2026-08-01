@@ -314,6 +314,56 @@ const createCashCollection = async (request, response) => {
   }
 };
 
+/*
+  POST /admin/khatabook/dues/metal
+  { "shopkeeperId": 1, "metalId": 1, "dueQuantity": 2.5, "entryDate": "2026-08-01", "notes": "Manual opening due" }
+*/
+const createMetalDue = async (request, response) => {
+  try {
+    response.status(201).json(
+      ApiResponse.success({
+        message: "Metal due added successfully",
+        data: await khatabookService.createAccountMetalDue({
+          payload: request.validated.body,
+          request,
+        }),
+      }),
+    );
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
+/*
+  POST /admin/khatabook/dues/cash
+  { "shopkeeperId": 1, "metalId": 1, "cashAmount": 1500, "entryDate": "2026-08-01", "notes": "Manual cash due" }
+*/
+const createCashDue = async (request, response) => {
+  try {
+    response.status(201).json(
+      ApiResponse.success({
+        message: "Cash due added successfully",
+        data: await khatabookService.createAccountCashDue({
+          payload: request.validated.body,
+          request,
+        }),
+      }),
+    );
+  } catch (error) {
+    response.status(error.statusCode || 500).json(
+      ApiResponse.error({
+        code: error.code || "INTERNAL_ERROR",
+        message: error.message || "An unexpected error occurred",
+      }),
+    );
+  }
+};
+
 // BUG-1: New controller — returns position data for a specific shopkeeper+metal
 // Used by the admin "Add Received Payment" page to show current outstanding/credit.
 const getPaymentPreview = async (request, response) => {
@@ -364,6 +414,10 @@ export const khatabookController = {
   addCashCollection,
   // Create standalone cash collection entry
   createCashCollection,
+  // Create standalone metal due entry
+  createMetalDue,
+  // Create standalone cash due entry
+  createCashDue,
   // Payment position preview for a shopkeeper+metal (BUG-1)
   getPaymentPreview,
 };

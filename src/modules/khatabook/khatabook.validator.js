@@ -161,3 +161,27 @@ export const createAccountCashCollectionSchema = addCashCollectionSchema.extend(
   }),
   params: z.object({}).passthrough(),
 });
+
+export const createAccountMetalDueSchema = z.object({
+  body: z.object({
+    shopkeeperId: id,
+    metalId: id,
+    dueQuantity: z.coerce.number().positive(),
+    entryDate: z.coerce.date().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+  }),
+  params: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+});
+
+export const createAccountCashDueSchema = z.object({
+  body: z.object({
+    shopkeeperId: id,
+    metalId: id,
+    cashAmount: z.coerce.number().positive(),
+    entryDate: z.coerce.date().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+  }),
+  params: z.object({}).passthrough(),
+  query: z.object({}).passthrough(),
+});

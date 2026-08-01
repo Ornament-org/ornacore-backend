@@ -11,7 +11,9 @@ import { khatabookController } from "./khatabook.controller.js";
 import {
   addCashCollectionSchema,
   addMetalCollectionSchema,
+  createAccountCashDueSchema,
   createAccountCashCollectionSchema,
+  createAccountMetalDueSchema,
   createAccountMetalCollectionSchema,
   createOrderSchema,
   currentShopkeeperLedgerSchema,
@@ -88,6 +90,20 @@ khatabookAdminRouter.post(
   ...protectAdmin(PERMISSIONS.KHATABOOK_ADD_PAYMENT),
   validate(createAccountCashCollectionSchema),
   asyncHandler(khatabookController.createCashCollection),
+);
+
+khatabookAdminRouter.post(
+  "/dues/metal",
+  ...protectAdmin(PERMISSIONS.KHATABOOK_CREATE_ORDER),
+  validate(createAccountMetalDueSchema),
+  asyncHandler(khatabookController.createMetalDue),
+);
+
+khatabookAdminRouter.post(
+  "/dues/cash",
+  ...protectAdmin(PERMISSIONS.KHATABOOK_CREATE_ORDER),
+  validate(createAccountCashDueSchema),
+  asyncHandler(khatabookController.createCashDue),
 );
 
 khatabookAdminRouter.get(

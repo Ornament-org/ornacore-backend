@@ -11,6 +11,11 @@ import { khatabookSettlementEngine } from "./khatabookSettlementEngine.js";
 const d = (value = 0) => new Decimal(value ?? 0);
 const q = (value) => d(value).toDecimalPlaces(3, Decimal.ROUND_HALF_UP).toFixed(3);
 const money = (value) => d(value).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toFixed(4);
+const dueOrderNumber = (prefix) =>
+  `${prefix}-${new Date().toISOString().replace(/\D/g, "").slice(0, 14)}-${Math.random()
+    .toString(36)
+    .slice(2, 6)
+    .toUpperCase()}`;
 const mapMetal = (metal) => ({
   id: Number(metal.id),
   code: metal.code,
@@ -554,6 +559,93 @@ export const khatabookService = {
         collectionType: KHATABOOK_COLLECTION_TYPES.CASH,
       },
       request,
+    });
+  },
+
+  async createAccountMetalDue({ payload, request }) {
+    return this.createAccountDue({
+      payload: {
+        ...payload,
+        dueType: "METAL",
+      },
+      request,
+    });
+  },
+
+  async createAccountCashDue({ payload, request }) {
+    return this.createAccountDue({
+      payload: {
+        ...payload,
+        dueType: "CASH",
+      },
+      request,
+    });
+  },
+
+  async createAccountDue({ payload, request }) {
+    return sequelize.transaction(async (transaction) => {
+      await ensureShopkeeper(payload.shopkeeperId, transaction);
+      await ensureMetal(payload.metalId, transaction);
+
+      const isMetalDue = payload.dueType === "METAL";
+      const fineDelivered = isMetalDue ? d(payload.dueQuantity) : d(0);
+      const cashDueAmount = isMetalDue ? d(0) : d(payload.cashAmount);
+      if (fineDelivered.lte(0) && cashDueAmount.lte(0)) {
+        throw new AppError("Due amount must be greater than zero", {
+          statusCode: 422,
+          code: "INVALID_DUE_AMOUNT",
+        });
+      }
+
+      const [currentDue, creditLimit] = await Promise.all([
+        khatabookSettlementEngine.calculateOutstandingService({
+          shopkeeperId: payload.shopkeeperId,
+          metalId: payload.metalId,
+          transaction,
+        }),
+        khatabookSettlementEngine.getCreditLimit({
+          shopkeeperId: payload.shopkeeperId,
+          metalId: payload.metalId,
+          transaction,
+        }),
+      ]);
+      const attemptedDue = currentDue.plus(fineDelivered);
+      const exceededBy = Decimal.max(0, attemptedDue.minus(creditLimit));
+
+      await db.KhatabookOrder.create(
+        {
+          orderNumber: dueOrderNumber(isMetalDue ? "MDUE" : "CDUE"),
+          shopkeeperId: payload.shopkeeperId,
+          metalId: payload.metalId,
+          entryDate: payload.entryDate ?? new Date(),
+          notes: payload.notes ?? null,
+          cashDueAmount: money(cashDueAmount),
+          previousDue: q(currentDue),
+          fineDelivered: q(fineDelivered),
+          creditReceived: q(0),
+          totalBeforeCollection: q(currentDue.plus(fineDelivered)),
+          runningDue: q(currentDue.plus(fineDelivered)),
+          outstandingDue: q(fineDelivered),
+          creditLimit: q(creditLimit),
+          attemptedDue: q(attemptedDue),
+          exceededBy: q(exceededBy),
+          isCreditLimitOverride: false,
+          createdByUserId: request?.auth?.sub ?? null,
+          updatedByUserId: request?.auth?.sub ?? null,
+        },
+        { transaction },
+      );
+
+      const settlement = await khatabookSettlementEngine.settleOutstandingDuesService({
+        shopkeeperId: payload.shopkeeperId,
+        metalId: payload.metalId,
+        transaction,
+      });
+      await db.ShopkeeperProfile.update(
+        { lastTransactionAt: new Date() },
+        { where: { id: payload.shopkeeperId }, transaction },
+      );
+      return settlement;
     });
   },
 

@@ -441,18 +441,24 @@ export const khatabookSettlementEngine = {
       .sort((a, b) => new Date(a.date) - new Date(b.date) || a.id - b.id)
       .map((event) => {
         if (event.kind === "ORDER") {
-          runningBalance = runningBalance.plus(event.order.fineDelivered);
+          const fineDelivered = d(event.order.fineDelivered);
+          runningBalance = runningBalance.plus(fineDelivered);
+          const isMetalDue = fineDelivered.gt(0);
           return {
             shopkeeperId,
             metalId,
             khatabookOrderId: event.order.id,
             collectionId: null,
             entryDate: event.date,
-            entryType: KHATABOOK_LEDGER_ENTRY_TYPES.DELIVERY,
-            debitFine: gm(event.order.fineDelivered),
+            entryType: isMetalDue
+              ? KHATABOOK_LEDGER_ENTRY_TYPES.DELIVERY
+              : KHATABOOK_LEDGER_ENTRY_TYPES.ADJUSTMENT,
+            debitFine: gm(fineDelivered),
             creditFine: gm(0),
             runningBalance: gm(runningBalance),
-            description: `${event.order.orderNumber} delivery`,
+            description: isMetalDue
+              ? `${event.order.orderNumber} metal due`
+              : `${event.order.orderNumber} cash due`,
           };
         }
 
