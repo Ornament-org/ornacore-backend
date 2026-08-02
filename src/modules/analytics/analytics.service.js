@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { Op } from "sequelize";
 import db from "../../database/models/InitializeModels.js";
+import { KHATABOOK_ADJUSTMENT_TYPES } from "../khatabook/khatabook.constants.js";
 
 const d = (v = 0) => new Decimal(v ?? 0);
 const gm = (v) => Number(d(v).toDecimalPlaces(3, Decimal.ROUND_HALF_UP));
@@ -57,7 +58,7 @@ const analyticsService = {
       };
     }
 
-    const [allOrders, rangeOrders, rangeCollections, creditLimits] = await Promise.all([
+    const [allOrders, rangeOrders, rangeCollections, creditLimits, manualMetalDues] = await Promise.all([
       db.KhatabookOrder.findAll({
         where: { shopkeeperId, metalId: { [Op.in]: metalIds } },
         attributes: ["metalId", "outstandingDue"],
@@ -82,6 +83,14 @@ const analyticsService = {
         where: { shopkeeperId },
         attributes: ["metalId", "creditLimitGrams", "advanceBalance"],
       }),
+      db.KhatabookAdjustment.findAll({
+        where: {
+          shopkeeperId,
+          metalId: { [Op.in]: metalIds },
+          adjustmentType: KHATABOOK_ADJUSTMENT_TYPES.METAL_DUE,
+        },
+        attributes: ["metalId", "dueQuantity"],
+      }).catch(() => []),
     ]);
 
     const creditByMetal = new Map(creditLimits.map((cl) => [String(cl.metalId), cl]));
@@ -93,7 +102,9 @@ const analyticsService = {
         value: gm(getValue(metal.id)),
       }));
 
-    const dueItems = makeItems((id) => sumByMetal(allOrders, id, "outstandingDue"));
+    const dueItems = makeItems((id) =>
+      sumByMetal(allOrders, id, "outstandingDue").plus(sumByMetal(manualMetalDues, id, "dueQuantity")),
+    );
 
     const deliveredItems = makeItems((id) => sumByMetal(rangeOrders, id, "fineDelivered"));
 

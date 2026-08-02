@@ -244,7 +244,7 @@ const ensureMetal = async (metalId, transaction) => {
 };
 
 const getMetalAccountSummary = async (shopkeeperId, metalId, options = {}) => {
-  const [orders, collections, creditLimitRow, manualDue] = await Promise.all([
+  const [orders, collections, manualDue] = await Promise.all([
     db.KhatabookOrder.findAll({
       where: { shopkeeperId, metalId },
       attributes: ["fineDelivered", "outstandingDue"],
@@ -255,16 +255,10 @@ const getMetalAccountSummary = async (shopkeeperId, metalId, options = {}) => {
       attributes: ["fineCredit"],
       ...options,
     }),
-    db.ShopkeeperMetalCreditLimit.findOne({
-      where: { shopkeeperId, metalId },
-      attributes: ["advanceBalance"],
-      ...options,
-    }),
     manualMetalDueSum({ shopkeeperId, metalId, transaction: options.transaction }),
   ]);
   const orderOutstanding = orders.reduce((total, order) => total.plus(order.outstandingDue), d(0));
-  const advanceBalance = d(creditLimitRow?.advanceBalance ?? 0);
-  const totalOutstandingDue = Decimal.max(0, orderOutstanding.plus(manualDue).minus(advanceBalance));
+  const totalOutstandingDue = orderOutstanding.plus(manualDue);
 
   return {
     totalOutstandingDue: q(totalOutstandingDue),
@@ -590,10 +584,7 @@ export const khatabookService = {
       const metalLimits   = creditByMetal.get(key);
       const creditLimit   = d(metalLimits?.creditLimitGrams ?? 0);
       const advanceBalance = d(metalLimits?.advanceBalance ?? 0);
-      const outstandingDue = Decimal.max(
-        0,
-        (totalDue.get(key) ?? d(0)).plus(manualDue.get(key) ?? d(0)).minus(advanceBalance),
-      );
+      const outstandingDue = (totalDue.get(key) ?? d(0)).plus(manualDue.get(key) ?? d(0));
       return {
         metal: mapMetal(metal),
         creditLimit: q(creditLimit),

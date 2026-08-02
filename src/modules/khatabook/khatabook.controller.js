@@ -127,8 +127,8 @@ const getShopkeeperLedger = async (request, response) => {
   }
 };
 
-// Shopkeeper's own read-only view excludes admin-only due adjustments and
-// recalculates balances from real deliveries/collections only.
+// Shopkeeper's own read-only view includes account-level due adjustments so
+// the transaction ledger explains the same balance shown on the profile cards.
 const getCurrentShopkeeperLedger = async (request, response) => {
   try {
     const result = await khatabookService.getShopkeeperLedger({
@@ -136,7 +136,6 @@ const getCurrentShopkeeperLedger = async (request, response) => {
       metalId: request.validated.query.metalId,
       page: request.validated.query.page,
       pageSize: request.validated.query.pageSize,
-      includeAdjustments: false,
     });
     response.json(ApiResponse.success(result));
   } catch (error) {

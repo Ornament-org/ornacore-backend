@@ -113,18 +113,11 @@ export const withBalance = async (profile, { includeManualAdjustments = true } =
     orderDueMap.set(key, prev);
   }
 
-  const advanceByMetal = new Map(
-    (profile.metalCreditLimits ?? []).map((limit) => [
-      String(limit.metalId),
-      new Decimal(limit.advanceBalance ?? 0),
-    ]),
-  );
-
   // Emit a row for every active metal (0.000 gm if no orders for that metal)
   const metalDues = activeMetals.map((metal) => {
     const key = String(metal.id);
     const entry = orderDueMap.get(key);
-    const due = Decimal.max(0, (entry?.due ?? new Decimal(0)).minus(advanceByMetal.get(key) ?? 0));
+    const due = entry?.due ?? new Decimal(0);
     return {
       metalId: key,
       name: metal.name,
@@ -666,7 +659,7 @@ const requestMoreInfo = async (request, response) => {
 const getMyProfile = async (request, response) => {
   try {
     const profile = await getCurrentShopkeeperProfile(request.auth.sub);
-    response.json(ApiResponse.success({ data: await withBalance(profile, { includeManualAdjustments: false }) }));
+    response.json(ApiResponse.success({ data: await withBalance(profile) }));
   } catch (error) {
     response.status(error.statusCode || 500).json(
       ApiResponse.error({
@@ -750,9 +743,7 @@ const uploadMyProfilePhoto = async (request, response) => {
     response.json(
       ApiResponse.success({
         message: "Profile photo updated successfully",
-        data: await withBalance(await getCurrentShopkeeperProfile(request.auth.sub), {
-          includeManualAdjustments: false,
-        }),
+        data: await withBalance(await getCurrentShopkeeperProfile(request.auth.sub)),
       }),
     );
   } catch (error) {
@@ -820,9 +811,7 @@ const submitForApproval = async (request, response) => {
     response.json(
       ApiResponse.success({
         message: "Shop profile submitted for admin approval",
-        data: await withBalance(await getCurrentShopkeeperProfile(request.auth.sub), {
-          includeManualAdjustments: false,
-        }),
+        data: await withBalance(await getCurrentShopkeeperProfile(request.auth.sub)),
       }),
     );
   } catch (error) {
