@@ -66,7 +66,12 @@ export const khatabookRepository = {
 
   findOrders({ shopkeeperId, metalId, search, limit, offset }, options = {}) {
     // BUG-7: only scope to shopkeeper when provided; omitting returns all (admin global view)
-    const where = {};
+    const where = {
+      [Op.and]: [
+        { orderNumber: { [Op.notLike]: "MDUE-%" } },
+        { orderNumber: { [Op.notLike]: "CDUE-%" } },
+      ],
+    };
     if (shopkeeperId) where.shopkeeperId = shopkeeperId;
     if (metalId) where.metalId = metalId;
     if (search) {
@@ -143,9 +148,10 @@ export const khatabookRepository = {
     return db.KhatabookLedgerEntry.bulkCreate(rows, options);
   },
 
-  async findLedger({ shopkeeperId, metalId, orderId, limit, offset }, options = {}) {
+  async findLedger({ shopkeeperId, metalId, orderId, limit, offset, includeAdjustments = true }, options = {}) {
     const where = { shopkeeperId };
     if (metalId) where.metalId = metalId;
+    if (!includeAdjustments) where.entryType = { [Op.ne]: "ADJUSTMENT" };
 
     // BUG-9: $alias.col$ in where with findAndCountAll produces wrong COUNT.
     // Resolve the collection IDs that reference this order first, then filter by PK/FK only.

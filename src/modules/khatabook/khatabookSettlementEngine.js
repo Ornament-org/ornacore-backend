@@ -3,6 +3,7 @@ import db from "../../database/models/InitializeModels.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { auditLogService } from "../audit-logs/audit-log.service.js";
 import {
+  KHATABOOK_ADJUSTMENT_TYPES,
   KHATABOOK_COLLECTION_TYPES,
   KHATABOOK_LEDGER_ENTRY_TYPES,
   KHATABOOK_ORDER_STATUSES,
@@ -354,7 +355,7 @@ export const khatabookSettlementEngine = {
   async settleOutstandingDuesService({ shopkeeperId, metalId, transaction }) {
     await this.assertEngineAccount({ shopkeeperId, metalId, transaction });
 
-    const [orders, collections] = await Promise.all([
+    const [orders, collections, adjustments] = await Promise.all([
       db.KhatabookOrder.findAll({
         where: { shopkeeperId, metalId },
         order: [
@@ -371,6 +372,14 @@ export const khatabookSettlementEngine = {
         ],
         transaction,
       }),
+      db.KhatabookAdjustment.findAll({
+        where: { shopkeeperId, metalId },
+        order: [
+          ["adjustmentDate", "ASC"],
+          ["id", "ASC"],
+        ],
+        transaction,
+      }).catch(() => []),
     ]);
 
     if (collections.length) {
@@ -437,6 +446,12 @@ export const khatabookSettlementEngine = {
         id: Number(collection.id),
         collection,
       })),
+      ...adjustments.map((adjustment) => ({
+        kind: "ADJUSTMENT",
+        date: adjustment.adjustmentDate,
+        id: Number(adjustment.id),
+        adjustment,
+      })),
     ]
       .sort((a, b) => new Date(a.date) - new Date(b.date) || a.id - b.id)
       .map((event) => {
@@ -459,6 +474,26 @@ export const khatabookSettlementEngine = {
             description: isMetalDue
               ? `${event.order.orderNumber} metal due`
               : `${event.order.orderNumber} cash due`,
+          };
+        }
+
+        if (event.kind === "ADJUSTMENT") {
+          const isMetalDue = event.adjustment.adjustmentType === KHATABOOK_ADJUSTMENT_TYPES.METAL_DUE;
+          const debitFine = isMetalDue ? d(event.adjustment.dueQuantity) : d(0);
+          runningBalance = runningBalance.plus(debitFine);
+          return {
+            shopkeeperId,
+            metalId,
+            khatabookOrderId: null,
+            collectionId: null,
+            entryDate: event.date,
+            entryType: KHATABOOK_LEDGER_ENTRY_TYPES.ADJUSTMENT,
+            debitFine: gm(debitFine),
+            creditFine: gm(0),
+            runningBalance: gm(runningBalance),
+            description: isMetalDue
+              ? `Metal due added by admin${event.adjustment.notes ? `: ${event.adjustment.notes}` : ""}`
+              : `Cash due added by admin${event.adjustment.notes ? `: ${event.adjustment.notes}` : ""}`,
           };
         }
 

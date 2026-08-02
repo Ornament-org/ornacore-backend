@@ -127,9 +127,8 @@ const getShopkeeperLedger = async (request, response) => {
   }
 };
 
-// Shopkeeper's own read-only view of their khatabook ledger — same data and
-// same mapping as the admin one above, just scoped to the authenticated
-// shop's id instead of an admin-supplied shopkeeperId.
+// Shopkeeper's own read-only view excludes admin-only due adjustments and
+// recalculates balances from real deliveries/collections only.
 const getCurrentShopkeeperLedger = async (request, response) => {
   try {
     const result = await khatabookService.getShopkeeperLedger({
@@ -137,6 +136,7 @@ const getCurrentShopkeeperLedger = async (request, response) => {
       metalId: request.validated.query.metalId,
       page: request.validated.query.page,
       pageSize: request.validated.query.pageSize,
+      includeAdjustments: false,
     });
     response.json(ApiResponse.success(result));
   } catch (error) {

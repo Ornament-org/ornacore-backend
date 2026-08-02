@@ -6,6 +6,7 @@ import { AppError } from "../../shared/errors/AppError.js";
 import { ApiResponse } from "../../shared/http/ApiResponse.js";
 import { mediaStorageService } from "../../integrations/media/media-storage.service.js";
 import { auditLogService } from "../audit-logs/audit-log.service.js";
+import { KHATABOOK_ADJUSTMENT_TYPES } from "../khatabook/khatabook.constants.js";
 import { shopkeeperDetailsService } from "./shopkeeper.service.js";
 
 export const shopkeeperInclude = [
@@ -36,8 +37,8 @@ export const shopkeeperInclude = [
   },
 ];
 
-export const withBalance = async (profile) => {
-  const [account, khatabookOrders, activeMetals] = await Promise.all([
+export const withBalance = async (profile, { includeManualAdjustments = true } = {}) => {
+  const [account, khatabookOrders, activeMetals, manualAdjustments] = await Promise.all([
     db.LedgerAccount.findOne({
       where: { shopkeeperId: profile.id, accountType: "ASSET" },
       include: [
@@ -66,6 +67,12 @@ export const withBalance = async (profile) => {
       order: [["displayOrder", "ASC"], ["id", "ASC"]],
       attributes: ["id", "name", "code"],
     }).catch(() => []),
+    includeManualAdjustments
+      ? db.KhatabookAdjustment.findAll({
+        where: { shopkeeperId: profile.id },
+        attributes: ["metalId", "adjustmentType", "dueQuantity", "cashAmount"],
+      }).catch(() => [])
+      : Promise.resolve([]),
   ]);
 
   const dueAmount = (account?.journalLines ?? []).reduce(
@@ -77,6 +84,9 @@ export const withBalance = async (profile) => {
     (balance, order) => balance + Number(order.cashDueAmount ?? 0),
     0,
   );
+  const manualCashDue = manualAdjustments
+    .filter((adjustment) => adjustment.adjustmentType === KHATABOOK_ADJUSTMENT_TYPES.CASH_DUE)
+    .reduce((balance, adjustment) => balance + Number(adjustment.cashAmount ?? 0), 0);
 
   // Build metalId → { name, code, due } from KhatabookOrder.outstandingDue
   const orderDueMap = new Map();
@@ -90,20 +100,40 @@ export const withBalance = async (profile) => {
     prev.due = prev.due.plus(new Decimal(order.outstandingDue ?? 0));
     orderDueMap.set(key, prev);
   }
+  for (const adjustment of manualAdjustments.filter(
+    (row) => row.adjustmentType === KHATABOOK_ADJUSTMENT_TYPES.METAL_DUE,
+  )) {
+    const key = String(adjustment.metalId);
+    const prev = orderDueMap.get(key) ?? {
+      name: "Metal",
+      code: "",
+      due: new Decimal(0),
+    };
+    prev.due = prev.due.plus(new Decimal(adjustment.dueQuantity ?? 0));
+    orderDueMap.set(key, prev);
+  }
+
+  const advanceByMetal = new Map(
+    (profile.metalCreditLimits ?? []).map((limit) => [
+      String(limit.metalId),
+      new Decimal(limit.advanceBalance ?? 0),
+    ]),
+  );
 
   // Emit a row for every active metal (0.000 gm if no orders for that metal)
   const metalDues = activeMetals.map((metal) => {
     const key = String(metal.id);
     const entry = orderDueMap.get(key);
+    const due = Decimal.max(0, (entry?.due ?? new Decimal(0)).minus(advanceByMetal.get(key) ?? 0));
     return {
       metalId: key,
       name: metal.name,
       code: metal.code,
-      dueGrams: entry ? entry.due.toFixed(3) : "0.000",
+      dueGrams: due.toFixed(3),
     };
   });
 
-  return { ...profile.toJSON(), dueAmount: (dueAmount + khatabookCashDue).toFixed(2), metalDues };
+  return { ...profile.toJSON(), dueAmount: (dueAmount + khatabookCashDue + manualCashDue).toFixed(2), metalDues };
 };
 
 export const getProfile = async (id, options = {}) => {
@@ -636,7 +666,7 @@ const requestMoreInfo = async (request, response) => {
 const getMyProfile = async (request, response) => {
   try {
     const profile = await getCurrentShopkeeperProfile(request.auth.sub);
-    response.json(ApiResponse.success({ data: await withBalance(profile) }));
+    response.json(ApiResponse.success({ data: await withBalance(profile, { includeManualAdjustments: false }) }));
   } catch (error) {
     response.status(error.statusCode || 500).json(
       ApiResponse.error({
@@ -720,7 +750,9 @@ const uploadMyProfilePhoto = async (request, response) => {
     response.json(
       ApiResponse.success({
         message: "Profile photo updated successfully",
-        data: await withBalance(await getCurrentShopkeeperProfile(request.auth.sub)),
+        data: await withBalance(await getCurrentShopkeeperProfile(request.auth.sub), {
+          includeManualAdjustments: false,
+        }),
       }),
     );
   } catch (error) {
@@ -788,7 +820,9 @@ const submitForApproval = async (request, response) => {
     response.json(
       ApiResponse.success({
         message: "Shop profile submitted for admin approval",
-        data: await withBalance(await getCurrentShopkeeperProfile(request.auth.sub)),
+        data: await withBalance(await getCurrentShopkeeperProfile(request.auth.sub), {
+          includeManualAdjustments: false,
+        }),
       }),
     );
   } catch (error) {

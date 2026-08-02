@@ -4,18 +4,17 @@ import { sequelize } from "../../config/database.js";
 import db from "../../database/models/InitializeModels.js";
 import { ORDER_STATUSES } from "../../constants/app.constants.js";
 import { AppError } from "../../shared/errors/AppError.js";
-import { KHATABOOK_COLLECTION_TYPES } from "./khatabook.constants.js";
+import {
+  KHATABOOK_ADJUSTMENT_TYPES,
+  KHATABOOK_COLLECTION_TYPES,
+  KHATABOOK_LEDGER_ENTRY_TYPES,
+} from "./khatabook.constants.js";
 import { khatabookRepository } from "./khatabook.repository.js";
 import { khatabookSettlementEngine } from "./khatabookSettlementEngine.js";
 
 const d = (value = 0) => new Decimal(value ?? 0);
 const q = (value) => d(value).toDecimalPlaces(3, Decimal.ROUND_HALF_UP).toFixed(3);
 const money = (value) => d(value).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toFixed(4);
-const dueOrderNumber = (prefix) =>
-  `${prefix}-${new Date().toISOString().replace(/\D/g, "").slice(0, 14)}-${Math.random()
-    .toString(36)
-    .slice(2, 6)
-    .toUpperCase()}`;
 const mapMetal = (metal) => ({
   id: Number(metal.id),
   code: metal.code,
@@ -214,6 +213,17 @@ const mapLedgerEntry = (entry) => ({
   description: entry.description,
 });
 
+const manualMetalDueSum = async ({ shopkeeperId, metalId, transaction }) => {
+  const where = { shopkeeperId, adjustmentType: KHATABOOK_ADJUSTMENT_TYPES.METAL_DUE };
+  if (metalId) where.metalId = metalId;
+  const adjustments = await db.KhatabookAdjustment.findAll({
+    where,
+    attributes: ["metalId", "dueQuantity"],
+    transaction,
+  }).catch(() => []);
+  return adjustments.reduce((total, adjustment) => total.plus(adjustment.dueQuantity ?? 0), d(0));
+};
+
 const ensureShopkeeper = async (shopkeeperId, transaction) => {
   const shopkeeper = await khatabookRepository.findShopkeeper(shopkeeperId, { transaction });
   if (!shopkeeper) {
@@ -234,7 +244,7 @@ const ensureMetal = async (metalId, transaction) => {
 };
 
 const getMetalAccountSummary = async (shopkeeperId, metalId, options = {}) => {
-  const [orders, collections] = await Promise.all([
+  const [orders, collections, creditLimitRow, manualDue] = await Promise.all([
     db.KhatabookOrder.findAll({
       where: { shopkeeperId, metalId },
       attributes: ["fineDelivered", "outstandingDue"],
@@ -245,16 +255,183 @@ const getMetalAccountSummary = async (shopkeeperId, metalId, options = {}) => {
       attributes: ["fineCredit"],
       ...options,
     }),
+    db.ShopkeeperMetalCreditLimit.findOne({
+      where: { shopkeeperId, metalId },
+      attributes: ["advanceBalance"],
+      ...options,
+    }),
+    manualMetalDueSum({ shopkeeperId, metalId, transaction: options.transaction }),
   ]);
+  const orderOutstanding = orders.reduce((total, order) => total.plus(order.outstandingDue), d(0));
+  const advanceBalance = d(creditLimitRow?.advanceBalance ?? 0);
+  const totalOutstandingDue = Decimal.max(0, orderOutstanding.plus(manualDue).minus(advanceBalance));
 
   return {
-    totalOutstandingDue: q(
-      orders.reduce((total, order) => total.plus(order.outstandingDue), d(0)),
-    ),
+    totalOutstandingDue: q(totalOutstandingDue),
     totalDelivered: q(orders.reduce((total, order) => total.plus(order.fineDelivered), d(0))),
     totalReceived: q(collections.reduce((total, collection) => total.plus(collection.fineCredit), d(0))),
     activeOrders: orders.filter((order) => d(order.outstandingDue).gt(0)).length,
   };
+};
+
+const getCustomerSafeLedger = async ({ shopkeeperId, metalId, page = 1, pageSize = 50 }) => {
+  const where = {
+    shopkeeperId,
+    [Op.and]: [
+      { orderNumber: { [Op.notLike]: "MDUE-%" } },
+      { orderNumber: { [Op.notLike]: "CDUE-%" } },
+    ],
+  };
+  const collectionWhere = { shopkeeperId };
+  if (metalId) {
+    where.metalId = metalId;
+    collectionWhere.metalId = metalId;
+  }
+
+  const [orders, collections] = await Promise.all([
+    db.KhatabookOrder.findAll({
+      where,
+      include: [
+        { model: db.Metal, as: "metal" },
+        {
+          model: db.Order,
+          as: "sourceOrders",
+          required: false,
+          attributes: ["id", "orderNumber", "status", "createdAt"],
+        },
+      ],
+      order: [
+        ["entryDate", "ASC"],
+        ["id", "ASC"],
+      ],
+    }),
+    db.KhatabookCollection.findAll({
+      where: collectionWhere,
+      include: [{ model: db.Metal, as: "metal" }],
+      order: [
+        ["collectionDate", "ASC"],
+        ["id", "ASC"],
+      ],
+    }),
+  ]);
+
+  let runningBalance = d(0);
+  const rows = [
+    ...orders.map((order) => ({ kind: "ORDER", date: order.entryDate, id: Number(order.id), order })),
+    ...collections.map((collection) => ({
+      kind: "COLLECTION",
+      date: collection.collectionDate,
+      id: Number(collection.id),
+      collection,
+    })),
+  ]
+    .sort((a, b) => new Date(a.date) - new Date(b.date) || a.id - b.id)
+    .map((event) => {
+      if (event.kind === "ORDER") {
+        runningBalance = runningBalance.plus(event.order.fineDelivered);
+        return {
+          id: `order-${event.order.id}`,
+          shopkeeperId: Number(event.order.shopkeeperId),
+          metalId: Number(event.order.metalId),
+          metal: event.order.metal ? mapMetal(event.order.metal) : null,
+          orderId: Number(event.order.id),
+          orderNumber: displayOrderNumber(event.order),
+          khatabookOrderNumber: event.order.orderNumber,
+          sourceOrders: (event.order.sourceOrders ?? []).map(mapSourceOrder),
+          collectionId: null,
+          collectionType: null,
+          receivedQuantity: null,
+          cashAmount: null,
+          metalRate: null,
+          fineCredit: null,
+          entryDate: event.date,
+          entryType: KHATABOOK_LEDGER_ENTRY_TYPES.DELIVERY,
+          debitFine: q(event.order.fineDelivered),
+          creditFine: q(0),
+          runningBalance: q(runningBalance),
+          description: `${event.order.orderNumber} delivery`,
+        };
+      }
+
+      runningBalance = Decimal.max(0, runningBalance.minus(event.collection.fineCredit));
+      return {
+        id: `collection-${event.collection.id}`,
+        shopkeeperId: Number(event.collection.shopkeeperId),
+        metalId: Number(event.collection.metalId),
+        metal: event.collection.metal ? mapMetal(event.collection.metal) : null,
+        orderId: null,
+        orderNumber: null,
+        khatabookOrderNumber: null,
+        sourceOrders: [],
+        collectionId: Number(event.collection.id),
+        collectionType: event.collection.collectionType,
+        receivedQuantity: event.collection.receivedQuantity == null ? null : q(event.collection.receivedQuantity),
+        cashAmount: event.collection.cashAmount == null ? null : money(event.collection.cashAmount),
+        metalRate: event.collection.metalRate == null ? null : money(event.collection.metalRate),
+        fineCredit: q(event.collection.fineCredit),
+        entryDate: event.date,
+        entryType:
+          event.collection.collectionType === KHATABOOK_COLLECTION_TYPES.CASH
+            ? KHATABOOK_LEDGER_ENTRY_TYPES.CASH_CONVERSION
+            : KHATABOOK_LEDGER_ENTRY_TYPES.METAL_COLLECTION,
+        debitFine: q(0),
+        creditFine: q(event.collection.fineCredit),
+        runningBalance: q(runningBalance),
+        description:
+          event.collection.collectionType === KHATABOOK_COLLECTION_TYPES.CASH
+            ? "Cash collection converted to metal"
+            : "Direct metal collection",
+      };
+    })
+    .reverse();
+
+  const offset = (page - 1) * pageSize;
+  return {
+    data: rows.slice(offset, offset + pageSize),
+    meta: { page, pageSize, totalItems: rows.length, totalPages: Math.ceil(rows.length / pageSize) },
+  };
+};
+
+const rebuildAdminLedgerForRead = async ({ shopkeeperId, metalId }) => {
+  const ids = new Set();
+  if (metalId) {
+    ids.add(Number(metalId));
+  } else {
+    const [orders, collections, adjustments] = await Promise.all([
+      db.KhatabookOrder.findAll({
+        where: {
+          shopkeeperId,
+          [Op.and]: [
+            { orderNumber: { [Op.notLike]: "MDUE-%" } },
+            { orderNumber: { [Op.notLike]: "CDUE-%" } },
+          ],
+        },
+        attributes: ["metalId"],
+        group: ["metalId"],
+      }),
+      db.KhatabookCollection.findAll({
+        where: { shopkeeperId },
+        attributes: ["metalId"],
+        group: ["metalId"],
+      }),
+      db.KhatabookAdjustment.findAll({
+        where: { shopkeeperId },
+        attributes: ["metalId"],
+        group: ["metalId"],
+      }).catch(() => []),
+    ]);
+    [...orders, ...collections, ...adjustments].forEach((row) => ids.add(Number(row.metalId)));
+  }
+
+  for (const id of ids) {
+    await sequelize.transaction((transaction) =>
+      khatabookSettlementEngine.settleOutstandingDuesService({
+        shopkeeperId,
+        metalId: id,
+        transaction,
+      }),
+    );
+  }
 };
 
 const loadSourceOrdersForFulfillment = async ({ payload, transaction }) => {
@@ -382,11 +559,14 @@ export const khatabookService = {
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
 
-    const [orders, collections, monthlyOrders, monthlyCollections] = await Promise.all([
+    const [orders, collections, monthlyOrders, monthlyCollections, manualAdjustments] = await Promise.all([
       db.KhatabookOrder.findAll({ where: { shopkeeperId } }),
       db.KhatabookCollection.findAll({ where: { shopkeeperId } }),
       db.KhatabookOrder.findAll({ where: { shopkeeperId, entryDate: { [Op.gte]: monthStart } } }),
       db.KhatabookCollection.findAll({ where: { shopkeeperId, collectionDate: { [Op.gte]: monthStart } } }),
+      db.KhatabookAdjustment.findAll({
+        where: { shopkeeperId, adjustmentType: KHATABOOK_ADJUSTMENT_TYPES.METAL_DUE },
+      }).catch(() => []),
     ]);
 
     const accumulate = (rows, getKey, getValue) => {
@@ -401,6 +581,7 @@ export const khatabookService = {
     const totalDelivered  = accumulate(orders,      (o) => String(o.metalId), (o) => d(o.fineDelivered));
     const totalDue        = accumulate(orders,      (o) => String(o.metalId), (o) => d(o.outstandingDue));
     const totalReceived   = accumulate(collections, (c) => String(c.metalId), (c) => d(c.fineCredit));
+    const manualDue       = accumulate(manualAdjustments, (a) => String(a.metalId), (a) => d(a.dueQuantity));
     const monthDelivered  = accumulate(monthlyOrders,      (o) => String(o.metalId), (o) => d(o.fineDelivered));
     const monthReceived   = accumulate(monthlyCollections, (c) => String(c.metalId), (c) => d(c.fineCredit));
 
@@ -409,7 +590,10 @@ export const khatabookService = {
       const metalLimits   = creditByMetal.get(key);
       const creditLimit   = d(metalLimits?.creditLimitGrams ?? 0);
       const advanceBalance = d(metalLimits?.advanceBalance ?? 0);
-      const outstandingDue = totalDue.get(key) ?? d(0);
+      const outstandingDue = Decimal.max(
+        0,
+        (totalDue.get(key) ?? d(0)).plus(manualDue.get(key) ?? d(0)).minus(advanceBalance),
+      );
       return {
         metal: mapMetal(metal),
         creditLimit: q(creditLimit),
@@ -474,14 +658,19 @@ export const khatabookService = {
     };
   },
 
-  async getShopkeeperLedger({ shopkeeperId, metalId, page = 1, pageSize = 50 }) {
+  async getShopkeeperLedger({ shopkeeperId, metalId, page = 1, pageSize = 50, includeAdjustments = true }) {
     await ensureShopkeeper(shopkeeperId);
     if (metalId) await ensureMetal(metalId);
+    if (!includeAdjustments) {
+      return getCustomerSafeLedger({ shopkeeperId, metalId, page, pageSize });
+    }
+    await rebuildAdminLedgerForRead({ shopkeeperId, metalId });
     const { rows, count } = await khatabookRepository.findLedger({
       shopkeeperId,
       metalId,
       limit: pageSize,
       offset: (page - 1) * pageSize,
+      includeAdjustments,
     });
     return {
       data: rows.map(mapLedgerEntry),
@@ -597,41 +786,18 @@ export const khatabookService = {
         });
       }
 
-      const [currentDue, creditLimit] = await Promise.all([
-        khatabookSettlementEngine.calculateOutstandingService({
-          shopkeeperId: payload.shopkeeperId,
-          metalId: payload.metalId,
-          transaction,
-        }),
-        khatabookSettlementEngine.getCreditLimit({
-          shopkeeperId: payload.shopkeeperId,
-          metalId: payload.metalId,
-          transaction,
-        }),
-      ]);
-      const attemptedDue = currentDue.plus(fineDelivered);
-      const exceededBy = Decimal.max(0, attemptedDue.minus(creditLimit));
-
-      await db.KhatabookOrder.create(
+      await db.KhatabookAdjustment.create(
         {
-          orderNumber: dueOrderNumber(isMetalDue ? "MDUE" : "CDUE"),
           shopkeeperId: payload.shopkeeperId,
           metalId: payload.metalId,
-          entryDate: payload.entryDate ?? new Date(),
+          adjustmentType: isMetalDue
+            ? KHATABOOK_ADJUSTMENT_TYPES.METAL_DUE
+            : KHATABOOK_ADJUSTMENT_TYPES.CASH_DUE,
+          adjustmentDate: payload.entryDate ?? new Date(),
           notes: payload.notes ?? null,
-          cashDueAmount: money(cashDueAmount),
-          previousDue: q(currentDue),
-          fineDelivered: q(fineDelivered),
-          creditReceived: q(0),
-          totalBeforeCollection: q(currentDue.plus(fineDelivered)),
-          runningDue: q(currentDue.plus(fineDelivered)),
-          outstandingDue: q(fineDelivered),
-          creditLimit: q(creditLimit),
-          attemptedDue: q(attemptedDue),
-          exceededBy: q(exceededBy),
-          isCreditLimitOverride: false,
+          dueQuantity: q(fineDelivered),
+          cashAmount: money(cashDueAmount),
           createdByUserId: request?.auth?.sub ?? null,
-          updatedByUserId: request?.auth?.sub ?? null,
         },
         { transaction },
       );

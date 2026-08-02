@@ -94,6 +94,9 @@ db.KhatabookOrderItem = (
 db.KhatabookCollection = (
   await import("../../modules/khatabook/khatabook-collection.model.js")
 ).default;
+db.KhatabookAdjustment = (
+  await import("../../modules/khatabook/khatabook-adjustment.model.js")
+).default;
 db.KhatabookSettlement = (
   await import("../../modules/khatabook/khatabook-settlement.model.js")
 ).default;
