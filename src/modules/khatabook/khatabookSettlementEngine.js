@@ -491,9 +491,9 @@ export const khatabookSettlementEngine = {
             debitFine: gm(debitFine),
             creditFine: gm(0),
             runningBalance: gm(runningBalance),
-            description: isMetalDue
-              ? `Metal due added by admin${event.adjustment.notes ? `: ${event.adjustment.notes}` : ""}`
-              : `Cash due added by admin${event.adjustment.notes ? `: ${event.adjustment.notes}` : ""}`,
+          description: isMetalDue
+            ? `${gm(event.adjustment.dueQuantity)} gm metal due added by admin${event.adjustment.notes ? `: ${event.adjustment.notes}` : ""}`
+            : `₹${Number(event.adjustment.cashAmount ?? 0).toLocaleString("en-IN")} cash due added by admin${event.adjustment.notes ? `: ${event.adjustment.notes}` : ""}`,
           };
         }
 

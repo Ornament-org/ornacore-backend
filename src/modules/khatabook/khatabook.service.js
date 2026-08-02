@@ -15,6 +15,12 @@ import { khatabookSettlementEngine } from "./khatabookSettlementEngine.js";
 const d = (value = 0) => new Decimal(value ?? 0);
 const q = (value) => d(value).toDecimalPlaces(3, Decimal.ROUND_HALF_UP).toFixed(3);
 const money = (value) => d(value).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toFixed(4);
+const accountDate = (value = new Date()) => {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Date(`${value}T12:00:00.000Z`);
+  }
+  return new Date(value);
+};
 const mapMetal = (metal) => ({
   id: Number(metal.id),
   code: metal.code,
@@ -784,7 +790,7 @@ export const khatabookService = {
           adjustmentType: isMetalDue
             ? KHATABOOK_ADJUSTMENT_TYPES.METAL_DUE
             : KHATABOOK_ADJUSTMENT_TYPES.CASH_DUE,
-          adjustmentDate: payload.entryDate ?? new Date(),
+          adjustmentDate: accountDate(payload.entryDate),
           notes: payload.notes ?? null,
           dueQuantity: q(fineDelivered),
           cashAmount: money(cashDueAmount),

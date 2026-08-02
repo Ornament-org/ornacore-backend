@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const id = z.coerce.number().int().positive();
+const dateOnly = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const itemSchema = z.object({
   itemName: z.string().trim().min(1).max(191),
@@ -167,7 +168,7 @@ export const createAccountMetalDueSchema = z.object({
     shopkeeperId: id,
     metalId: id,
     dueQuantity: z.coerce.number().positive(),
-    entryDate: z.coerce.date().optional(),
+    entryDate: dateOnly.optional(),
     notes: z.string().trim().max(2000).nullable().optional(),
   }),
   params: z.object({}).passthrough(),
@@ -179,7 +180,7 @@ export const createAccountCashDueSchema = z.object({
     shopkeeperId: id,
     metalId: id,
     cashAmount: z.coerce.number().positive(),
-    entryDate: z.coerce.date().optional(),
+    entryDate: dateOnly.optional(),
     notes: z.string().trim().max(2000).nullable().optional(),
   }),
   params: z.object({}).passthrough(),
