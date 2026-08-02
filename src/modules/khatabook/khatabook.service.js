@@ -9,6 +9,7 @@ import {
   KHATABOOK_COLLECTION_TYPES,
   KHATABOOK_LEDGER_ENTRY_TYPES,
 } from "./khatabook.constants.js";
+import { getCurrentMetalDueMap } from "./khatabookBalance.js";
 import { khatabookRepository } from "./khatabook.repository.js";
 import { khatabookSettlementEngine } from "./khatabookSettlementEngine.js";
 
@@ -219,17 +220,6 @@ const mapLedgerEntry = (entry) => ({
   description: entry.description,
 });
 
-const manualMetalDueSum = async ({ shopkeeperId, metalId, transaction }) => {
-  const where = { shopkeeperId, adjustmentType: KHATABOOK_ADJUSTMENT_TYPES.METAL_DUE };
-  if (metalId) where.metalId = metalId;
-  const adjustments = await db.KhatabookAdjustment.findAll({
-    where,
-    attributes: ["metalId", "dueQuantity"],
-    transaction,
-  }).catch(() => []);
-  return adjustments.reduce((total, adjustment) => total.plus(adjustment.dueQuantity ?? 0), d(0));
-};
-
 const ensureShopkeeper = async (shopkeeperId, transaction) => {
   const shopkeeper = await khatabookRepository.findShopkeeper(shopkeeperId, { transaction });
   if (!shopkeeper) {
@@ -250,7 +240,7 @@ const ensureMetal = async (metalId, transaction) => {
 };
 
 const getMetalAccountSummary = async (shopkeeperId, metalId, options = {}) => {
-  const [orders, collections, manualDue] = await Promise.all([
+  const [orders, collections, dueMap] = await Promise.all([
     db.KhatabookOrder.findAll({
       where: { shopkeeperId, metalId },
       attributes: ["fineDelivered", "outstandingDue"],
@@ -261,10 +251,13 @@ const getMetalAccountSummary = async (shopkeeperId, metalId, options = {}) => {
       attributes: ["fineCredit"],
       ...options,
     }),
-    manualMetalDueSum({ shopkeeperId, metalId, transaction: options.transaction }),
+    getCurrentMetalDueMap({
+      shopkeeperId,
+      metalIds: [metalId],
+      transaction: options.transaction,
+    }),
   ]);
-  const orderOutstanding = orders.reduce((total, order) => total.plus(order.outstandingDue), d(0));
-  const totalOutstandingDue = orderOutstanding.plus(manualDue);
+  const totalOutstandingDue = dueMap.get(String(metalId)) ?? d(0);
 
   return {
     totalOutstandingDue: q(totalOutstandingDue),
@@ -559,14 +552,12 @@ export const khatabookService = {
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
 
-    const [orders, collections, monthlyOrders, monthlyCollections, manualAdjustments] = await Promise.all([
+    const [orders, collections, monthlyOrders, monthlyCollections, currentDueByMetal] = await Promise.all([
       db.KhatabookOrder.findAll({ where: { shopkeeperId } }),
       db.KhatabookCollection.findAll({ where: { shopkeeperId } }),
       db.KhatabookOrder.findAll({ where: { shopkeeperId, entryDate: { [Op.gte]: monthStart } } }),
       db.KhatabookCollection.findAll({ where: { shopkeeperId, collectionDate: { [Op.gte]: monthStart } } }),
-      db.KhatabookAdjustment.findAll({
-        where: { shopkeeperId, adjustmentType: KHATABOOK_ADJUSTMENT_TYPES.METAL_DUE },
-      }).catch(() => []),
+      getCurrentMetalDueMap({ shopkeeperId, metalIds: metals.map((metal) => metal.id) }),
     ]);
 
     const accumulate = (rows, getKey, getValue) => {
@@ -579,9 +570,7 @@ export const khatabookService = {
     };
 
     const totalDelivered  = accumulate(orders,      (o) => String(o.metalId), (o) => d(o.fineDelivered));
-    const totalDue        = accumulate(orders,      (o) => String(o.metalId), (o) => d(o.outstandingDue));
     const totalReceived   = accumulate(collections, (c) => String(c.metalId), (c) => d(c.fineCredit));
-    const manualDue       = accumulate(manualAdjustments, (a) => String(a.metalId), (a) => d(a.dueQuantity));
     const monthDelivered  = accumulate(monthlyOrders,      (o) => String(o.metalId), (o) => d(o.fineDelivered));
     const monthReceived   = accumulate(monthlyCollections, (c) => String(c.metalId), (c) => d(c.fineCredit));
 
@@ -590,7 +579,7 @@ export const khatabookService = {
       const metalLimits   = creditByMetal.get(key);
       const creditLimit   = d(metalLimits?.creditLimitGrams ?? 0);
       const advanceBalance = d(metalLimits?.advanceBalance ?? 0);
-      const outstandingDue = (totalDue.get(key) ?? d(0)).plus(manualDue.get(key) ?? d(0));
+      const outstandingDue = currentDueByMetal.get(key) ?? d(0);
       return {
         metal: mapMetal(metal),
         creditLimit: q(creditLimit),

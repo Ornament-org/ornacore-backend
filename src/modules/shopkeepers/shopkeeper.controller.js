@@ -7,6 +7,7 @@ import { ApiResponse } from "../../shared/http/ApiResponse.js";
 import { mediaStorageService } from "../../integrations/media/media-storage.service.js";
 import { auditLogService } from "../audit-logs/audit-log.service.js";
 import { KHATABOOK_ADJUSTMENT_TYPES } from "../khatabook/khatabook.constants.js";
+import { getCurrentMetalDueMap } from "../khatabook/khatabookBalance.js";
 import { shopkeeperDetailsService } from "./shopkeeper.service.js";
 
 export const shopkeeperInclude = [
@@ -88,36 +89,16 @@ export const withBalance = async (profile, { includeManualAdjustments = true } =
     .filter((adjustment) => adjustment.adjustmentType === KHATABOOK_ADJUSTMENT_TYPES.CASH_DUE)
     .reduce((balance, adjustment) => balance + Number(adjustment.cashAmount ?? 0), 0);
 
-  // Build metalId → { name, code, due } from KhatabookOrder.outstandingDue
-  const orderDueMap = new Map();
-  for (const order of khatabookOrders) {
-    const key = String(order.metalId);
-    const prev = orderDueMap.get(key) ?? {
-      name: order.metal?.name ?? "Metal",
-      code: order.metal?.code ?? "",
-      due: new Decimal(0),
-    };
-    prev.due = prev.due.plus(new Decimal(order.outstandingDue ?? 0));
-    orderDueMap.set(key, prev);
-  }
-  for (const adjustment of manualAdjustments.filter(
-    (row) => row.adjustmentType === KHATABOOK_ADJUSTMENT_TYPES.METAL_DUE,
-  )) {
-    const key = String(adjustment.metalId);
-    const prev = orderDueMap.get(key) ?? {
-      name: "Metal",
-      code: "",
-      due: new Decimal(0),
-    };
-    prev.due = prev.due.plus(new Decimal(adjustment.dueQuantity ?? 0));
-    orderDueMap.set(key, prev);
-  }
+  const metalDueMap = await getCurrentMetalDueMap({
+    shopkeeperId: profile.id,
+    metalIds: activeMetals.map((metal) => metal.id),
+    includeManualAdjustments,
+  });
 
   // Emit a row for every active metal (0.000 gm if no orders for that metal)
   const metalDues = activeMetals.map((metal) => {
     const key = String(metal.id);
-    const entry = orderDueMap.get(key);
-    const due = entry?.due ?? new Decimal(0);
+    const due = metalDueMap.get(key) ?? new Decimal(0);
     return {
       metalId: key,
       name: metal.name,
